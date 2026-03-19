@@ -1,8 +1,11 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'core/theme/app_colors.dart';
 import 'core/theme/theme.dart';
+import 'firebase_options.dart';
 import 'providers/providers.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_tab_view.dart';
@@ -10,6 +13,12 @@ import 'screens/onboarding/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase before anything else
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   await initializeDateFormatting('es_ES', null);
   await initializeDateFormatting('es_CO', null);
 
@@ -38,7 +47,7 @@ class InventarIAApp extends ConsumerWidget {
   }
 }
 
-/// Mirrors ContentView.swift — routes between Onboarding, Login, and MainTabView
+/// Routes between Onboarding, Login, and MainTabView
 class _AppRouter extends ConsumerWidget {
   const _AppRouter();
 
@@ -49,8 +58,7 @@ class _AppRouter extends ConsumerWidget {
     return authAsync.when(
       loading: () => const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(
-              color: AppColors.deepSpaceBlue),
+          child: CircularProgressIndicator(color: AppColors.deepSpaceBlue),
         ),
       ),
       error: (_, __) => const LoginScreen(),

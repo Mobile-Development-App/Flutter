@@ -1,0 +1,16 @@
+include: package:flutter_lints/flutter.yaml
+
+# Project-level overrides
+analyzer:
+  errors:
+    # These are style preferences, not bugs.
+    # Run `dart fix --apply` once to auto-fix all of them.
+    prefer_const_constructors: ignore
+    prefer_const_literals_to_create_immutables: ignore
+    prefer_const_constructors_in_immutables: ignore
+
+linter:
+  rules:
+    prefer_const_constructors: false
+    prefer_const_literals_to_create_immutables: false
+    prefer_const_constructors_in_immutables: false

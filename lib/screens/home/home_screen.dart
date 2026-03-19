@@ -7,7 +7,6 @@ import '../../core/utils/extensions.dart';
 import '../../models/mock_data.dart';
 import '../../models/analytics_data.dart';
 import '../../providers/providers.dart';
-import '../../providers/inventory_provider.dart';
 import '../../widgets/widgets.dart';
 import '../notifications/notifications_screen.dart';
 import '../products/add_product_screen.dart';
@@ -32,7 +31,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
-    final invAsync = ref.watch(inventoryProvider);
+    final invAsync  = ref.watch(inventoryProvider);
     final authAsync = ref.watch(authProvider);
 
     final InventoryState? invState = invAsync.value;
@@ -45,12 +44,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('Inicio'),
         leading: IconButton(
-          icon: Icon(
-            Icons.settings_rounded,
-            color: isDark
-                ? AppColors.darkTextPrimary
-                : Colors.white,
-          ),
+          icon: Icon(Icons.settings_rounded,
+              color: isDark ? AppColors.darkTextPrimary : Colors.white),
           onPressed: () => _showSettings(context),
         ),
         actions: [
@@ -59,9 +54,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               IconButton(
                 icon: Icon(Icons.notifications_rounded,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : Colors.white),
+                    color: isDark ? AppColors.darkTextPrimary : Colors.white),
                 onPressed: () => _showNotifications(context),
               ),
               if ((invState?.unreadAlertCount ?? 0) > 0)
@@ -71,9 +64,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: const BoxDecoration(
-                      color: AppColors.error,
-                      shape: BoxShape.circle,
-                    ),
+                        color: AppColors.error, shape: BoxShape.circle),
                     child: Text(
                       '${(invState?.unreadAlertCount ?? 0) > 9 ? '9+' : invState?.unreadAlertCount}',
                       style: const TextStyle(
@@ -88,8 +79,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () =>
-            ref.read(inventoryProvider.notifier).refreshData(),
+        onRefresh: () => ref.read(inventoryProvider.notifier).refreshData(),
         color: AppColors.freshSky,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -130,14 +120,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Bienvenido, $firstName 👋',
-              style: AppTypography.title3
-                  .copyWith(color: Colors.white)),
+              style: AppTypography.title3.copyWith(color: Colors.white)),
           const SizedBox(height: 4),
-          Text(
-            'Tu inventario está al día. Aquí tienes un resumen.',
-            style: AppTypography.caption
-                .copyWith(color: Colors.white70),
-          ),
+          Text('Tu inventario está al día. Aquí tienes un resumen.',
+              style: AppTypography.caption.copyWith(color: Colors.white70)),
         ],
       ),
     );
@@ -184,11 +170,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _salesChart(bool isDark) {
-    final totalSales =
-        _salesData.fold<double>(0.0, (s, p) => s + p.sales);
+    final totalSales = _salesData.fold<double>(0.0, (s, p) => s + p.sales);
     final spots = _salesData.asMap().entries.map((e) {
-      return FlSpot(
-          e.key.toDouble(), e.value.sales / 1000000);
+      return FlSpot(e.key.toDouble(), e.value.sales / 1000000);
     }).toList();
 
     return AppCard(
@@ -197,80 +181,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Ventas Semanales',
-                  style: AppTypography.headline),
-              Text(
-                totalSales.compactCurrency,
-                style: AppTypography.callout
-                    .copyWith(color: AppColors.success),
-              ),
+              Text('Ventas Semanales', style: AppTypography.headline),
+              Text(totalSales.compactCurrency,
+                  style: AppTypography.callout.copyWith(color: AppColors.success)),
             ],
           ),
           const SizedBox(height: 16),
           SizedBox(
             height: 180,
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(
-                  leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 22,
-                      getTitlesWidget: (v, _) {
-                        if (v.toInt() < _salesData.length) {
-                          return Text(
-                            _salesData[v.toInt()].date.dayOfWeek,
-                            style: const TextStyle(fontSize: 10),
-                          );
-                        }
-                        return const SizedBox();
-                      },
+            child: LineChart(LineChartData(
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              titlesData: FlTitlesData(
+                leftTitles:   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles:  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 22,
+                    getTitlesWidget: (v, _) {
+                      if (v.toInt() < _salesData.length) {
+                        return Text(_salesData[v.toInt()].date.dayOfWeek,
+                            style: const TextStyle(fontSize: 10));
+                      }
+                      return const SizedBox();
+                    },
+                  ),
+                ),
+              ),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  color: AppColors.freshSky,
+                  barWidth: 2.5,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.freshSky.withValues(alpha: 0.3),
+                        AppColors.freshSky.withValues(alpha: 0.05),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
                   ),
                 ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: AppColors.freshSky,
-                    barWidth: 2.5,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.freshSky
-                              .withValues(alpha: 0.3),
-                          AppColors.freshSky
-                              .withValues(alpha: 0.05),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+              ],
+            )),
           ),
         ],
       ),
     );
   }
 
-  Widget _alertsSection(BuildContext context, InventoryState inventoryState, bool isDark) {
-    final alerts = inventoryState.alerts.take(3).toList();
-    final unread = inventoryState.unreadAlertCount;
+  Widget _alertsSection(
+      BuildContext context, InventoryState invState, bool isDark) {
+    final alerts = invState.alerts.take(3).toList();
+    final unread = invState.unreadAlertCount;
 
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -284,10 +256,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Text('Alertas IA', style: AppTypography.headline),
               const Spacer(),
               if (unread > 0)
-                BadgeWidget(
-                  text: '$unread nuevas',
-                  style: BadgeStyle.warning,
-                ),
+                BadgeWidget(text: '$unread nuevas', style: BadgeStyle.warning),
             ],
           ),
           const SizedBox(height: 12),
@@ -300,16 +269,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       .markAlertAsRead(alert),
                 ),
               )),
-          if (inventoryState.alerts.length > 3)
+          if (invState.alerts.length > 3)
             TextButton.icon(
               onPressed: () => _showNotifications(context),
               icon: const Icon(Icons.arrow_forward_rounded,
                   size: 14, color: AppColors.freshSky),
-              label: Text(
-                'Ver todas las alertas',
-                style: AppTypography.callout
-                    .copyWith(color: AppColors.freshSky),
-              ),
+              label: Text('Ver todas las alertas',
+                  style: AppTypography.callout
+                      .copyWith(color: AppColors.freshSky)),
             ),
         ],
       ),
@@ -320,8 +287,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Acciones Rápidas',
-            style: AppTypography.headline),
+        Text('Acciones Rápidas', style: AppTypography.headline),
         const SizedBox(height: 12),
         Row(
           children: [

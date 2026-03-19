@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 // ─────────────────────────────────────────────
 // StockStatus
@@ -14,11 +15,11 @@ enum StockStatus {
   Color get color {
     switch (this) {
       case inStock:
-        return const Color(0xFF2ECC71); // AppColors.success
+        return const Color(0xFF2ECC71);
       case lowStock:
-        return const Color(0xFFF39C12); // AppColors.warning
+        return const Color(0xFFF39C12);
       case outOfStock:
-        return const Color(0xFFE74C3C); // AppColors.error
+        return const Color(0xFFE74C3C);
     }
   }
 
@@ -50,7 +51,6 @@ enum ProductCategory {
   const ProductCategory(this.label);
   final String label;
 
-  /// Material icons as equivalents for SF Symbols
   IconData get icon {
     switch (this) {
       case beverages:
@@ -87,10 +87,60 @@ enum ProductCategory {
         (e) => e.name == value,
         orElse: () => ProductCategory.other,
       );
+
+  // Map backend categoryId string to enum
+  static ProductCategory fromCategoryId(String? id) {
+    if (id == null) {
+      return ProductCategory.other;
+    }
+    final lower = id.toLowerCase();
+    if (lower.contains('bebida') || lower.contains('beverage')) {
+      return ProductCategory.beverages;
+    }
+    if (lower.contains('lácteo') ||
+        lower.contains('lacteo') ||
+        lower.contains('dairy')) {
+      return ProductCategory.dairy;
+    }
+    if (lower.contains('snack')) {
+      return ProductCategory.snacks;
+    }
+    if (lower.contains('limpieza') || lower.contains('clean')) {
+      return ProductCategory.cleaning;
+    }
+    if (lower.contains('personal') || lower.contains('cuidado')) {
+      return ProductCategory.personalCare;
+    }
+    if (lower.contains('grano') || lower.contains('grain')) {
+      return ProductCategory.grains;
+    }
+    if (lower.contains('fruta') || lower.contains('verdura')) {
+      return ProductCategory.fruits;
+    }
+    if (lower.contains('carne') || lower.contains('meat')) {
+      return ProductCategory.meat;
+    }
+    if (lower.contains('panadería') || lower.contains('bakery')) {
+      return ProductCategory.bakery;
+    }
+    if (lower.contains('congelado') || lower.contains('frozen')) {
+      return ProductCategory.frozen;
+    }
+    if (lower.contains('condimento') || lower.contains('condiment')) {
+      return ProductCategory.condiments;
+    }
+    return ProductCategory.other;
+  }
 }
 
 // ─────────────────────────────────────────────
-// Product  (mirrors Product struct in Swift)
+// Product
+// Backend field mapping:
+//   currentStock  → quantity
+//   sellingPrice  → salePrice
+//   categoryId    → category (enum)
+//   isDeleted     → isActive (inverted)
+//   updatedAt     → lastUpdated
 // ─────────────────────────────────────────────
 class Product {
   final String id;
@@ -109,6 +159,10 @@ class Product {
   final String description;
   final DateTime lastUpdated;
   final bool isActive;
+  // Extra backend fields
+  final String? storeId;
+  final String? categoryId;
+  final String? supplierId;
 
   const Product({
     required this.id,
@@ -127,11 +181,13 @@ class Product {
     required this.description,
     required this.lastUpdated,
     required this.isActive,
+    this.storeId,
+    this.categoryId,
+    this.supplierId,
   });
 
-  // ── Computed properties ──
+  // ── Computed ──
 
-  /// ((salePrice - costPrice) / costPrice) * 100
   double get profitMargin =>
       costPrice > 0 ? ((salePrice - costPrice) / costPrice) * 100 : 0;
 
@@ -139,61 +195,56 @@ class Product {
   double get costValue => costPrice * quantity;
 
   StockStatus get stockStatus {
-    if (quantity <= 0) return StockStatus.outOfStock;
-    if (quantity <= minStock) return StockStatus.lowStock;
+    if (quantity <= 0) {
+      return StockStatus.outOfStock;
+    }
+    if (quantity <= minStock) {
+      return StockStatus.lowStock;
+    }
     return StockStatus.inStock;
   }
 
-  /// Expires within 30 days but not yet expired
   bool get isExpiringSoon {
-    if (expirationDate == null) return false;
+    if (expirationDate == null) {
+      return false;
+    }
     final remaining = expirationDate!.difference(DateTime.now());
     return remaining.inSeconds > 0 && remaining.inDays <= 30;
   }
 
   bool get isExpired {
-    if (expirationDate == null) return false;
+    if (expirationDate == null) {
+      return false;
+    }
     return expirationDate!.isBefore(DateTime.now());
   }
 
-  Product copyWith({
-    String? id,
-    String? name,
-    String? sku,
-    String? barcode,
-    ProductCategory? category,
-    String? supplier,
-    double? costPrice,
-    double? salePrice,
-    int? quantity,
-    int? minStock,
-    String? location,
-    DateTime? expirationDate,
-    String? imageURL,
-    String? description,
-    DateTime? lastUpdated,
-    bool? isActive,
-  }) {
-    return Product(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      sku: sku ?? this.sku,
-      barcode: barcode ?? this.barcode,
-      category: category ?? this.category,
-      supplier: supplier ?? this.supplier,
-      costPrice: costPrice ?? this.costPrice,
-      salePrice: salePrice ?? this.salePrice,
-      quantity: quantity ?? this.quantity,
-      minStock: minStock ?? this.minStock,
-      location: location ?? this.location,
-      expirationDate: expirationDate ?? this.expirationDate,
-      imageURL: imageURL ?? this.imageURL,
-      description: description ?? this.description,
-      lastUpdated: lastUpdated ?? this.lastUpdated,
-      isActive: isActive ?? this.isActive,
-    );
-  }
+  // ── From backend JSON ──
+  factory Product.fromBackendJson(Map<String, dynamic> json) => Product(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        sku: json['sku'] as String? ?? '',
+        barcode: json['barcode'] as String? ?? '',
+        category:
+            ProductCategory.fromCategoryId(json['categoryId'] as String?),
+        categoryId: json['categoryId'] as String?,
+        supplierId: json['supplierId'] as String?,
+        supplier: json['supplierId'] as String? ?? '',
+        costPrice: (json['costPrice'] as num?)?.toDouble() ?? 0,
+        salePrice: (json['sellingPrice'] as num?)?.toDouble() ?? 0,
+        quantity: (json['currentStock'] as num?)?.toInt() ?? 0,
+        minStock: (json['minStock'] as num?)?.toInt() ?? 0,
+        location: json['location'] as String? ?? '',
+        description: json['unit'] as String? ?? '',
+        imageURL: json['imageUrl'] as String?,
+        storeId: json['storeId'] as String?,
+        lastUpdated: ApiService.parseDate(json['updatedAt']) ??
+            ApiService.parseDate(json['createdAt']) ??
+            DateTime.now(),
+        isActive: !(json['isDeleted'] as bool? ?? false),
+      );
 
+  // ── Local JSON ──
   factory Product.fromJson(Map<String, dynamic> json) => Product(
         id: json['id'] as String,
         name: json['name'] as String,
@@ -213,7 +264,24 @@ class Product {
         description: json['description'] as String,
         lastUpdated: DateTime.parse(json['lastUpdated'] as String),
         isActive: json['isActive'] as bool? ?? true,
+        storeId: json['storeId'] as String?,
       );
+
+  // What to send TO backend when creating/updating
+  Map<String, dynamic> toBackendJson() => {
+        'name': name,
+        'sku': sku,
+        'barcode': barcode,
+        'categoryId': categoryId ?? category.value,
+        'unit': description,
+        'location': location,
+        'costPrice': costPrice,
+        'sellingPrice': salePrice,
+        'currentStock': quantity,
+        'minStock': minStock,
+        if (supplierId != null) 'supplierId': supplierId,
+        if (imageURL != null) 'imageUrl': imageURL,
+      };
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -233,7 +301,47 @@ class Product {
         'description': description,
         'lastUpdated': lastUpdated.toIso8601String(),
         'isActive': isActive,
+        if (storeId != null) 'storeId': storeId,
       };
+
+  Product copyWith({
+    String? name,
+    String? sku,
+    String? barcode,
+    ProductCategory? category,
+    String? supplier,
+    double? costPrice,
+    double? salePrice,
+    int? quantity,
+    int? minStock,
+    String? location,
+    DateTime? expirationDate,
+    String? imageURL,
+    String? description,
+    DateTime? lastUpdated,
+    bool? isActive,
+  }) =>
+      Product(
+        id: id,
+        name: name ?? this.name,
+        sku: sku ?? this.sku,
+        barcode: barcode ?? this.barcode,
+        category: category ?? this.category,
+        supplier: supplier ?? this.supplier,
+        costPrice: costPrice ?? this.costPrice,
+        salePrice: salePrice ?? this.salePrice,
+        quantity: quantity ?? this.quantity,
+        minStock: minStock ?? this.minStock,
+        location: location ?? this.location,
+        expirationDate: expirationDate ?? this.expirationDate,
+        imageURL: imageURL ?? this.imageURL,
+        description: description ?? this.description,
+        lastUpdated: lastUpdated ?? this.lastUpdated,
+        isActive: isActive ?? this.isActive,
+        storeId: storeId,
+        categoryId: categoryId,
+        supplierId: supplierId,
+      );
 
   @override
   bool operator ==(Object other) =>

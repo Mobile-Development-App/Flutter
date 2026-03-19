@@ -6,7 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 
 // ─────────────────────────────────────────────
-// AuditEvent
+// AuditEvent (local audit trail)
 // ─────────────────────────────────────────────
 class AuditEvent {
   final String id;
@@ -79,23 +79,17 @@ class AuditEvent {
 
 // ─────────────────────────────────────────────
 // PersistenceService
-// Uses SharedPreferences only — no path_provider, no dart:io.
-// Works reliably on Android, iOS and web.
+// Handles: local cache, audit log, stores/employees (local-only fallback)
+// JWT token storage is handled by ApiService
 // ─────────────────────────────────────────────
 class PersistenceService {
   PersistenceService._();
   static final PersistenceService shared = PersistenceService._();
 
-  // ── Keys ──────────────────────────────────
-  static const _kProducts   = 'inventaria_products';
-  static const _kStores     = 'inventaria_stores';
-  static const _kEmployees  = 'inventaria_employees';
-  static const _kAlerts     = 'inventaria_alerts';
-  static const _kOrders     = 'inventaria_orders';
-  static const _kSuppliers  = 'inventaria_suppliers';
-  static const _kUser       = 'inventaria_current_user';
-  static const _kAuditLog   = 'inventaria_audit_log';
-  static const _kSeeded     = 'inventaria_seeded';
+  static const _kAuditLog  = 'inventaria_audit_log';
+  static const _kSeeded    = 'inventaria_seeded';
+  static const _kStores    = 'inventaria_stores';
+  static const _kEmployees = 'inventaria_employees';
 
   // ── Generic helpers ────────────────────────
 
@@ -106,8 +100,7 @@ class PersistenceService {
   ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final encoded = jsonEncode(items.map(toJson).toList());
-      await prefs.setString(key, encoded);
+      await prefs.setString(key, jsonEncode(items.map(toJson).toList()));
     } catch (e) {
       debugPrint('[PersistenceService] saveList $key error: $e');
     }
@@ -131,122 +124,50 @@ class PersistenceService {
     }
   }
 
-  Future<void> _saveSingle<T>(
-    String key,
-    T item,
-    Map<String, dynamic> Function(T) toJson,
-  ) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(key, jsonEncode(toJson(item)));
-    } catch (e) {
-      debugPrint('[PersistenceService] saveSingle $key error: $e');
-    }
-  }
-
-  Future<T?> _loadSingle<T>(
-    String key,
-    T Function(Map<String, dynamic>) fromJson,
-  ) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(key);
-      if (raw == null || raw.isEmpty) return null;
-      return fromJson(jsonDecode(raw) as Map<String, dynamic>);
-    } catch (e) {
-      debugPrint('[PersistenceService] loadSingle $key error: $e');
-      return null;
-    }
-  }
-
-  Future<bool> _exists(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.containsKey(key);
-  }
-
-  Future<void> _delete(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(key);
-  }
-
-  // ── Typed helpers ──────────────────────────
-
-  Future<void> saveProducts(List<Product> items) =>
-      _saveList(_kProducts, items, (p) => p.toJson());
-  Future<List<Product>> loadProducts() =>
-      _loadList(_kProducts, Product.fromJson);
-
-  Future<void> saveStores(List<Store> items) =>
-      _saveList(_kStores, items, (s) => s.toJson());
-  Future<List<Store>> loadStores() =>
-      _loadList(_kStores, Store.fromJson);
-
-  Future<void> saveEmployees(List<Employee> items) =>
-      _saveList(_kEmployees, items, (e) => e.toJson());
-  Future<List<Employee>> loadEmployees() =>
-      _loadList(_kEmployees, Employee.fromJson);
-
-  Future<void> saveAlerts(List<InventoryAlert> items) =>
-      _saveList(_kAlerts, items, (a) => a.toJson());
-  Future<List<InventoryAlert>> loadAlerts() =>
-      _loadList(_kAlerts, InventoryAlert.fromJson);
-
-  Future<void> saveOrders(List<Order> items) =>
-      _saveList(_kOrders, items, (o) => o.toJson());
-  Future<List<Order>> loadOrders() =>
-      _loadList(_kOrders, Order.fromJson);
-
-  Future<void> saveSuppliers(List<Supplier> items) =>
-      _saveList(_kSuppliers, items, (s) => s.toJson());
-  Future<List<Supplier>> loadSuppliers() =>
-      _loadList(_kSuppliers, Supplier.fromJson);
-
-  // ── User session ───────────────────────────
-
-  Future<void> saveUser(User user) =>
-      _saveSingle(_kUser, user, (u) => u.toJson());
-  Future<User?> loadUser() =>
-      _loadSingle(_kUser, User.fromJson);
-  Future<void> clearUser() => _delete(_kUser);
-
   // ── Audit log ──────────────────────────────
 
   Future<void> logAuditEvent(AuditEvent event) async {
-    try {
-      final events = await _loadList(_kAuditLog, AuditEvent.fromJson);
-      events.add(event);
-      final trimmed = events.length > 1000
-          ? events.sublist(events.length - 1000)
-          : events;
-      await _saveList(_kAuditLog, trimmed, (e) => e.toJson());
-    } catch (e) {
-      debugPrint('[PersistenceService] logAuditEvent error: $e');
-    }
+    final events = await _loadList(_kAuditLog, AuditEvent.fromJson);
+    events.add(event);
+    final trimmed = events.length > 1000
+        ? events.sublist(events.length - 1000)
+        : events;
+    await _saveList(_kAuditLog, trimmed, (e) => e.toJson());
   }
 
-  Future<List<AuditEvent>> loadAuditLog() =>
-      _loadList(_kAuditLog, AuditEvent.fromJson);
+  // ── Stores ─────────────────────────────────
 
-  // ── First launch seed ──────────────────────
+  Future<List<Store>> loadStores() async {
+    return _loadList(_kStores, Store.fromJson);
+  }
+
+  Future<void> saveStores(List<Store> stores) async {
+    await _saveList(_kStores, stores, (s) => s.toJson());
+  }
+
+  // ── Employees ──────────────────────────────
+
+  Future<List<Employee>> loadEmployees() async {
+    return _loadList(_kEmployees, Employee.fromJson);
+  }
+
+  Future<void> saveEmployees(List<Employee> employees) async {
+    await _saveList(_kEmployees, employees, (e) => e.toJson());
+  }
+
+  // ── Seed flag ──────────────────────────────
+
+  Future<bool> isSeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kSeeded) ?? false;
+  }
+
+  Future<void> markSeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kSeeded, true);
+  }
 
   Future<void> seedInitialDataIfNeeded() async {
-    try {
-      final already = await _exists(_kSeeded);
-      if (already) return;
-
-      await saveProducts(MockData.products);
-      await saveStores(MockData.stores);
-      await saveEmployees(MockData.employees);
-      await saveAlerts(MockData.alerts);
-      await saveOrders(MockData.orders);
-      await saveSuppliers(MockData.suppliers);
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kSeeded, true);
-
-      debugPrint('[PersistenceService] Initial data seeded');
-    } catch (e) {
-      debugPrint('[PersistenceService] seedInitialDataIfNeeded error: $e');
-    }
+    debugPrint('[PersistenceService] Using backend API — no local seed needed');
   }
 }

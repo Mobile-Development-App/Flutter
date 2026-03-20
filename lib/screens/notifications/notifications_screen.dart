@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
@@ -18,6 +20,25 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 class _NotificationsScreenState
     extends ConsumerState<NotificationsScreen> {
   bool _showAll = true;
+  Timer? _tickTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild periodically so the "days remaining" snapshot updates
+    // as time passes (based on `alert.createdAt`).
+    _tickTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tickTimer?.cancel();
+    _tickTimer = null;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +187,7 @@ class _NotificationsScreenState
   Widget _alertRow(InventoryAlert alert) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: AlertCard(
+      child: AlertCardRestockDaysV2(
         alert: alert,
         onTap: () =>
             ref.read(inventoryProvider.notifier).markAlertAsRead(alert),

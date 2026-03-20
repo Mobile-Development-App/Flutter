@@ -162,7 +162,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                     itemCount: products.length,
                     itemBuilder: (_, i) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: ProductCard(
+                      child: ProductCardRestockDaysV2(
                         product: products[i],
                         onTap: () => _showDetail(
                             context, products[i]),

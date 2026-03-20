@@ -182,10 +182,8 @@ class ContextNotifier extends Notifier<ContextState> {
     final products     = inv.products;
     final alerts       = inv.alerts;
     final stats        = inv.dashboardStats;
-    final firstName = auth?.currentUser?.fullName
-            ?.split(' ')
-            .first ??
-        'Usuario';
+    final fullName = auth?.currentUser?.fullName;
+    final firstName = fullName == null ? 'Usuario' : fullName.split(' ').first;
 
     final critical  = products.where((p) => p.stockStatus == StockStatus.outOfStock && p.isActive).toList();
     final warning   = products.where((p) => p.stockStatus == StockStatus.lowStock && p.isActive).toList();

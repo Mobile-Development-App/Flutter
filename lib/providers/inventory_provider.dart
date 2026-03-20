@@ -288,7 +288,14 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
 
   Future<void> addProduct(Product product) async {
     try {
-      final body = await _api.post(kProducts, product.toBackendJson())
+      // Some UI flows create a new Product without `storeId`.
+      // Backend usually expects it to associate the record to the current store.
+      final productToSend = product.storeId == null
+          ? product.copyWith(storeId: _api.storeId)
+          : product;
+
+      final body =
+          await _api.post(kProducts, productToSend.toBackendJson())
           as Map<String, dynamic>;
       final created = Product.fromBackendJson(
           body['product'] as Map<String, dynamic>? ?? body);
@@ -313,7 +320,10 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
 
   Future<void> updateProduct(Product product) async {
     try {
-      await _api.patch('$kProducts/${product.id}', product.toBackendJson());
+      final productToSend = product.storeId == null
+          ? product.copyWith(storeId: _api.storeId)
+          : product;
+      await _api.patch('$kProducts/${product.id}', productToSend.toBackendJson());
       debugPrint('[Inventory] ✅ updateProduct synced to backend');
     } catch (e) {
       debugPrint('[Inventory] ⚠️  updateProduct API failed, updating locally: $e');

@@ -20,23 +20,23 @@ class AddProductScreen extends ConsumerStatefulWidget {
 }
 
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
-  final _nameCtrl      = TextEditingController();
-  final _skuCtrl       = TextEditingController();
-  final _barcodeCtrl   = TextEditingController();
-  final _supplierCtrl  = TextEditingController();
-  final _costCtrl      = TextEditingController();
-  final _saleCtrl      = TextEditingController();
-  final _qtyCtrl       = TextEditingController();
-  final _minStockCtrl  = TextEditingController();
-  final _locationCtrl  = TextEditingController();
-  final _descCtrl      = TextEditingController();
-  final _imageUrlCtrl  = TextEditingController(); // ← nuevo
+  final _nameCtrl = TextEditingController();
+  final _skuCtrl = TextEditingController();
+  final _barcodeCtrl = TextEditingController();
+  final _supplierCtrl = TextEditingController();
+  final _costCtrl = TextEditingController();
+  final _saleCtrl = TextEditingController();
+  final _qtyCtrl = TextEditingController();
+  final _minStockCtrl = TextEditingController();
+  final _locationCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _imageUrlCtrl = TextEditingController();
 
   ProductCategory _category = ProductCategory.other;
   DateTime? _expirationDate;
   bool _hasExpiration = false;
-  bool _showSuccess   = false;
-  bool _imageError    = false; // track if URL is invalid/broken
+  bool _showSuccess = false;
+  bool _imageError = false;
 
   bool get _isEditing => widget.editingProduct != null;
 
@@ -78,9 +78,17 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   @override
   void dispose() {
     for (final c in [
-      _nameCtrl, _skuCtrl, _barcodeCtrl, _supplierCtrl,
-      _costCtrl, _saleCtrl, _qtyCtrl, _minStockCtrl,
-      _locationCtrl, _descCtrl, _imageUrlCtrl,
+      _nameCtrl,
+      _skuCtrl,
+      _barcodeCtrl,
+      _supplierCtrl,
+      _costCtrl,
+      _saleCtrl,
+      _qtyCtrl,
+      _minStockCtrl,
+      _locationCtrl,
+      _descCtrl,
+      _imageUrlCtrl,
     ]) {
       c.dispose();
     }
@@ -88,29 +96,29 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 
   void _populate(Product p) {
-    _nameCtrl.text     = p.name;
-    _skuCtrl.text      = p.sku;
-    _barcodeCtrl.text  = p.barcode;
+    _nameCtrl.text = p.name;
+    _skuCtrl.text = p.sku;
+    _barcodeCtrl.text = p.barcode;
     _supplierCtrl.text = p.supplier;
-    _costCtrl.text     = p.costPrice.toStringAsFixed(0);
-    _saleCtrl.text     = p.salePrice.toStringAsFixed(0);
-    _qtyCtrl.text      = '${p.quantity}';
+    _costCtrl.text = p.costPrice.toStringAsFixed(0);
+    _saleCtrl.text = p.salePrice.toStringAsFixed(0);
+    _qtyCtrl.text = '${p.quantity}';
     _minStockCtrl.text = '${p.minStock}';
     _locationCtrl.text = p.location;
-    _descCtrl.text     = p.description;
+    _descCtrl.text = p.description;
     _imageUrlCtrl.text = p.imageURL ?? '';
-    _category          = p.category;
+    _category = p.category;
     if (p.expirationDate != null) {
-      _hasExpiration   = true;
-      _expirationDate  = p.expirationDate;
+      _hasExpiration = true;
+      _expirationDate = p.expirationDate;
     }
   }
 
   void _populateFromScan(ScannedProductResult scan) {
-    _nameCtrl.text    = scan.name;
+    _nameCtrl.text = scan.name;
     _barcodeCtrl.text = scan.barcode;
-    _category         = scan.category;
-    _saleCtrl.text    = scan.suggestedPrice.toStringAsFixed(0);
+    _category = scan.category;
+    _saleCtrl.text = scan.suggestedPrice.toStringAsFixed(0);
   }
 
   @override
@@ -123,9 +131,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         title: Text(_isEditing ? 'Editar Producto' : 'Agregar Producto'),
         leading: TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancelar',
-              style: AppTypography.callout
-                  .copyWith(color: AppColors.textSecondary)),
+          child: Text(
+            'Cancelar',
+            style: AppTypography.callout.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
         ),
         leadingWidth: 90,
       ),
@@ -147,8 +158,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 color: AppColors.success.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check_circle_rounded,
-                  size: 64, color: AppColors.success),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                size: 64,
+                color: AppColors.success,
+              ),
             ),
             const SizedBox(height: 24),
             Text(
@@ -160,8 +174,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               _isEditing
                   ? '${_nameCtrl.text} se ha actualizado correctamente'
                   : '${_nameCtrl.text} se ha agregado al inventario',
-              style: AppTypography.body
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -188,7 +203,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           if (widget.fromScan != null) _aiBanner(),
           const SizedBox(height: 8),
 
-          // ── Image picker section ──
           _imageSection(isDark),
           const SizedBox(height: 16),
 
@@ -196,78 +210,154 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             title: 'Información Básica',
             icon: Icons.info_outline_rounded,
             children: [
-              _field('Nombre del producto', _nameCtrl, 'Ej: Leche Entera 1L', isDark),
-              _field('SKU', _skuCtrl, 'Ej: DAI-001', isDark),
-              _field('Código de barras', _barcodeCtrl, 'Ej: 7701234567890', isDark,
-                  keyboardType: TextInputType.number),
+              _field(
+                'Nombre del producto',
+                _nameCtrl,
+                'Ej: Leche Entera 1L',
+                isDark,
+              ),
+              _field(
+                'SKU',
+                _skuCtrl,
+                'Ej: DAI-001',
+                isDark,
+              ),
+              _field(
+                'Código de barras',
+                _barcodeCtrl,
+                'Ej: 7701234567890',
+                isDark,
+                keyboardType: TextInputType.number,
+              ),
               _categoryPicker(isDark),
-              _field('Proveedor', _supplierCtrl, 'Ej: Lácteos Alpina', isDark),
+              _field(
+                'Proveedor',
+                _supplierCtrl,
+                'Ej: Lácteos Alpina',
+                isDark,
+              ),
             ],
           ),
           const SizedBox(height: 16),
+
           _section(
             title: 'Precios',
             icon: Icons.monetization_on_outlined,
             children: [
-              Row(children: [
-                Expanded(
-                  child: _field('Precio de costo', _costCtrl, '0', isDark,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _field('Precio de venta', _saleCtrl, '0', isDark,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                ),
-              ]),
+              Row(
+                children: [
+                  Expanded(
+                    child: _field(
+                      'Precio de costo',
+                      _costCtrl,
+                      '0',
+                      isDark,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _field(
+                      'Precio de venta',
+                      _saleCtrl,
+                      '0',
+                      isDark,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: _marginColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(children: [
-                  Icon(Icons.percent_rounded, color: _marginColor, size: 16),
-                  const SizedBox(width: 8),
-                  Text('Margen de ganancia:',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textSecondary)),
-                  const SizedBox(width: 6),
-                  Text(_calculatedMargin.percentFormatted,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.percent_rounded,
+                      color: _marginColor,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Margen de ganancia:',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _calculatedMargin.percentFormatted,
                       style: AppTypography.callout.copyWith(
-                          color: _marginColor, fontWeight: FontWeight.w600)),
-                ]),
+                        color: _marginColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
+
           _section(
             title: 'Inventario',
             icon: Icons.inventory_outlined,
             children: [
-              Row(children: [
-                Expanded(
-                  child: _field('Cantidad', _qtyCtrl, '0', isDark,
-                      keyboardType: TextInputType.number),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _field('Stock mínimo', _minStockCtrl, '0', isDark,
-                      keyboardType: TextInputType.number),
-                ),
-              ]),
-              _field('Ubicación', _locationCtrl, 'Ej: Pasillo 3, Estante A', isDark),
+              Row(
+                children: [
+                  Expanded(
+                    child: _field(
+                      'Cantidad',
+                      _qtyCtrl,
+                      '0',
+                      isDark,
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _field(
+                      'Stock mínimo',
+                      _minStockCtrl,
+                      '0',
+                      isDark,
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              _field(
+                'Ubicación',
+                _locationCtrl,
+                'Ej: Pasillo 3, Estante A',
+                isDark,
+              ),
               SwitchListTile(
                 value: _hasExpiration,
                 onChanged: (v) => setState(() => _hasExpiration = v),
                 activeThumbColor: AppColors.deepSpaceBlue,
                 activeTrackColor: AppColors.deepSpaceBlue.withValues(alpha: 0.4),
-                title: Row(children: [
-                  const Icon(Icons.calendar_today_outlined,
-                      size: 18, color: AppColors.textTertiary),
-                  const SizedBox(width: 8),
-                  Text('Tiene fecha de vencimiento', style: AppTypography.callout),
-                ]),
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 18,
+                      color: AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Tiene fecha de vencimiento',
+                      style: AppTypography.callout,
+                    ),
+                  ],
+                ),
                 contentPadding: EdgeInsets.zero,
               ),
               if (_hasExpiration)
@@ -277,9 +367,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       context: context,
                       initialDate: _expirationDate ?? DateTime.now(),
                       firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 3650)),
+                      lastDate: DateTime.now().add(
+                        const Duration(days: 3650),
+                      ),
                     );
-                    if (picked != null) setState(() => _expirationDate = picked);
+                    if (picked != null) {
+                      setState(() => _expirationDate = picked);
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.all(14),
@@ -289,22 +383,28 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                           : AppColors.surfaceSecondary,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(children: [
-                      const Icon(Icons.calendar_today_rounded,
-                          size: 16, color: AppColors.textTertiary),
-                      const SizedBox(width: 10),
-                      Text(
-                        _expirationDate != null
-                            ? _expirationDate!.shortFormatted
-                            : 'Seleccionar fecha',
-                        style: AppTypography.body,
-                      ),
-                    ]),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 16,
+                          color: AppColors.textTertiary,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          _expirationDate != null
+                              ? _expirationDate!.shortFormatted
+                              : 'Seleccionar fecha',
+                          style: AppTypography.body,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 16),
+
           _section(
             title: 'Descripción',
             icon: Icons.notes_rounded,
@@ -329,6 +429,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             ],
           ),
           const SizedBox(height: 20),
+
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -343,66 +444,82 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Image Section — optional URL input with preview
-  // ─────────────────────────────────────────────
   Widget _imageSection(bool isDark) {
     return AppCard(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Icon(Icons.image_outlined,
-                size: 16, color: AppColors.deepSpaceBlue),
-            const SizedBox(width: 6),
-            Text('Imagen del Producto', style: AppTypography.headline),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.textTertiary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(4),
+          Row(
+            children: [
+              const Icon(
+                Icons.image_outlined,
+                size: 16,
+                color: AppColors.deepSpaceBlue,
               ),
-              child: Text('Opcional',
-                  style: AppTypography.caption2
-                      .copyWith(color: AppColors.textTertiary)),
-            ),
-          ]),
+              const SizedBox(width: 6),
+              Text('Imagen del Producto', style: AppTypography.headline),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.textTertiary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Opcional',
+                  style: AppTypography.caption2.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 14),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Preview
-            _imagePreview(isDark),
-            const SizedBox(width: 14),
-            // URL input
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('URL de la imagen',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _imageUrlCtrl,
-                    keyboardType: TextInputType.url,
-                    onChanged: (_) => setState(() => _imageError = false),
-                    decoration: const InputDecoration(
-                      hintText: 'https://...',
-                      prefixIcon: Icon(Icons.link_rounded,
-                          size: 18, color: AppColors.textTertiary),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _imagePreview(isDark),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'URL de la imagen',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Pega la URL de una imagen. Si se deja vacío se usará el ícono de la categoría.',
-                    style: AppTypography.caption2
-                        .copyWith(color: AppColors.textTertiary),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _imageUrlCtrl,
+                      keyboardType: TextInputType.url,
+                      onChanged: (_) => setState(() => _imageError = false),
+                      decoration: const InputDecoration(
+                        hintText: 'https://...',
+                        prefixIcon: Icon(
+                          Icons.link_rounded,
+                          size: 18,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Pega la URL de una imagen. Si se deja vacío se usará el ícono de la categoría.',
+                      style: AppTypography.caption2.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ],
       ),
     );
@@ -425,11 +542,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           ? Image.network(
               url,
               fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) => progress == null
-                  ? child
-                  : Center(
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: color)),
+              loadingBuilder: (_, child, progress) {
+                return progress == null
+                    ? child
+                    : Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: color,
+                        ),
+                      );
+              },
               errorBuilder: (_, __, ___) {
                 Future.microtask(() {
                   if (mounted) setState(() => _imageError = true);
@@ -449,18 +571,30 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
   Color get _categoryColor {
     switch (_category) {
-      case ProductCategory.beverages:   return AppColors.freshSky;
-      case ProductCategory.dairy:       return AppColors.info;
-      case ProductCategory.snacks:      return AppColors.warning;
-      case ProductCategory.cleaning:    return AppColors.teaGreen;
-      case ProductCategory.personalCare: return Colors.pink;
-      case ProductCategory.grains:      return Colors.brown;
-      case ProductCategory.fruits:      return AppColors.success;
-      case ProductCategory.meat:        return AppColors.error;
-      case ProductCategory.bakery:      return Colors.orange;
-      case ProductCategory.frozen:      return AppColors.freshSky;
-      case ProductCategory.condiments:  return Colors.red;
-      case ProductCategory.other:       return AppColors.textSecondary;
+      case ProductCategory.beverages:
+        return AppColors.freshSky;
+      case ProductCategory.dairy:
+        return AppColors.info;
+      case ProductCategory.snacks:
+        return AppColors.warning;
+      case ProductCategory.cleaning:
+        return AppColors.teaGreen;
+      case ProductCategory.personalCare:
+        return Colors.pink;
+      case ProductCategory.grains:
+        return Colors.brown;
+      case ProductCategory.fruits:
+        return AppColors.success;
+      case ProductCategory.meat:
+        return AppColors.error;
+      case ProductCategory.bakery:
+        return Colors.orange;
+      case ProductCategory.frozen:
+        return AppColors.freshSky;
+      case ProductCategory.condiments:
+        return Colors.red;
+      case ProductCategory.other:
+        return AppColors.textSecondary;
     }
   }
 
@@ -471,23 +605,35 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         color: AppColors.deepSpaceBlue.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(children: [
-        const Icon(Icons.auto_awesome_rounded,
-            color: AppColors.deepSpaceBlue, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Detectado por IA',
-                style: AppTypography.caption
-                    .copyWith(fontWeight: FontWeight.w600)),
-            Text(
-              'Los campos fueron completados automáticamente. Verifica la información.',
-              style: AppTypography.caption2
-                  .copyWith(color: AppColors.textSecondary),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.auto_awesome_rounded,
+            color: AppColors.deepSpaceBlue,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Detectado por IA',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Los campos fueron completados automáticamente. Verifica la información.',
+                  style: AppTypography.caption2.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
-          ]),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -501,15 +647,15 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(icon, size: 16, color: AppColors.deepSpaceBlue),
-            const SizedBox(width: 6),
-            Text(title, style: AppTypography.headline),
-          ]),
+          Row(
+            children: [
+              Icon(icon, size: 16, color: AppColors.deepSpaceBlue),
+              const SizedBox(width: 6),
+              Text(title, style: AppTypography.headline),
+            ],
+          ),
           const SizedBox(height: 14),
-          ...children
-              .expand((w) => [w, const SizedBox(height: 12)])
-              .toList()
+          ...children.expand((w) => [w, const SizedBox(height: 12)]).toList()
             ..removeLast(),
         ],
       ),
@@ -526,9 +672,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: AppTypography.caption
-                .copyWith(color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: AppTypography.caption.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
         const SizedBox(height: 6),
         TextField(
           controller: ctrl,
@@ -544,9 +693,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Categoría',
-            style: AppTypography.caption
-                .copyWith(color: AppColors.textSecondary)),
+        Text(
+          'Categoría',
+          style: AppTypography.caption.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -561,14 +713,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             isExpanded: true,
             underline: const SizedBox.shrink(),
             items: ProductCategory.values
-                .map((c) => DropdownMenuItem(
-                      value: c,
-                      child: Row(children: [
+                .map(
+                  (c) => DropdownMenuItem(
+                    value: c,
+                    child: Row(
+                      children: [
                         Icon(c.icon, size: 16),
                         const SizedBox(width: 8),
                         Text(c.label),
-                      ]),
-                    ))
+                      ],
+                    ),
+                  ),
+                )
                 .toList(),
             onChanged: (v) {
               if (v != null) setState(() => _category = v);
@@ -581,22 +737,25 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
   void _save() {
     final product = Product(
-      id:             widget.editingProduct?.id ?? const Uuid().v4(),
-      name:           _nameCtrl.text.trim(),
-      sku:            _skuCtrl.text.trim(),
-      barcode:        _barcodeCtrl.text.trim(),
-      category:       _category,
-      supplier:       _supplierCtrl.text.trim(),
-      costPrice:      double.tryParse(_costCtrl.text) ?? 0,
-      salePrice:      double.tryParse(_saleCtrl.text) ?? 0,
-      quantity:       int.tryParse(_qtyCtrl.text) ?? 0,
-      minStock:       int.tryParse(_minStockCtrl.text) ?? 0,
-      location:       _locationCtrl.text.trim(),
+      id: widget.editingProduct?.id ?? const Uuid().v4(),
+      name: _nameCtrl.text.trim(),
+      sku: _skuCtrl.text.trim(),
+      barcode: _barcodeCtrl.text.trim(),
+      category: _category,
+      supplier: _supplierCtrl.text.trim(),
+      costPrice: double.tryParse(_costCtrl.text) ?? 0,
+      salePrice: double.tryParse(_saleCtrl.text) ?? 0,
+      quantity: int.tryParse(_qtyCtrl.text) ?? 0,
+      minStock: int.tryParse(_minStockCtrl.text) ?? 0,
+      location: _locationCtrl.text.trim(),
       expirationDate: _hasExpiration ? _expirationDate : null,
-      description:    _descCtrl.text.trim(),
-      imageURL:       _imageUrl,   // ← null si vacío
-      lastUpdated:    DateTime.now(),
-      isActive:       true,
+      description: _descCtrl.text.trim(),
+      imageURL: _imageUrl,
+      lastUpdated: DateTime.now(),
+      isActive: true,
+      storeId: widget.editingProduct?.storeId,
+      categoryId: widget.editingProduct?.categoryId,
+      supplierId: widget.editingProduct?.supplierId,
     );
 
     if (_isEditing) {

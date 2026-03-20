@@ -4,3 +4,4 @@ export 'store_provider.dart';
 export 'analytics_provider.dart';
 export 'settings_provider.dart';
 export 'context_provider.dart';
+export 'restock_ai_suggestions_provider.dart';

@@ -20,85 +20,135 @@ class ApiException implements Exception {
 
 // ─────────────────────────────────────────────
 // ApiService — singleton HTTP client
-// Attaches Bearer token + X-Store-Id to every request
+// Token = Firebase ID Token (JWT), NOT the uid
+// Attaches:  Authorization: Bearer <idToken>
+//            X-Store-Id: <storeId>
 // ─────────────────────────────────────────────
 class ApiService {
   ApiService._();
   static final ApiService shared = ApiService._();
 
-  static const _kToken   = 'inventaria_jwt_token';
+  static const _kIdToken = 'inventaria_id_token';
   static const _kStoreId = 'inventaria_store_id';
+  static const _kUid     = 'inventaria_uid';
 
-  String? _token;
+  String? _idToken;
   String? _storeId;
+  String? _uid;
 
   // ── Auth state ────────────────────────────
 
-  Future<void> setAuth(String token, String storeId) async {
-    _token   = token;
-    _storeId = storeId;
+  /// Call after login/register with the Firebase ID Token (not uid)
+  Future<void> setAuth(String idToken, String storeId, {String uid = ''}) async {
+    _idToken  = idToken;
+    _storeId  = storeId;
+    _uid      = uid;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kToken,   token);
+    await prefs.setString(_kIdToken, idToken);
     await prefs.setString(_kStoreId, storeId);
+    if (uid.isNotEmpty) await prefs.setString(_kUid, uid);
+    debugPrint('[API] Auth set — storeId: $storeId uid: $uid '
+        'token: ${idToken.length > 20 ? idToken.substring(0, 20) : idToken}...');
   }
 
   Future<bool> restoreAuth() async {
     final prefs = await SharedPreferences.getInstance();
-    _token   = prefs.getString(_kToken);
-    _storeId = prefs.getString(_kStoreId);
-    return _token != null && _storeId != null;
+    _idToken  = prefs.getString(_kIdToken);
+    _storeId  = prefs.getString(_kStoreId);
+    _uid      = prefs.getString(_kUid);
+    final ok  = _idToken != null && _storeId != null;
+    debugPrint('[API] restoreAuth → ${ok ? "OK storeId=$_storeId" : "NO stored session"}');
+    return ok;
   }
 
   Future<void> clearAuth() async {
-    _token   = null;
-    _storeId = null;
+    _idToken  = null;
+    _storeId  = null;
+    _uid      = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kToken);
+    await prefs.remove(_kIdToken);
     await prefs.remove(_kStoreId);
+    await prefs.remove(_kUid);
+    debugPrint('[API] Auth cleared');
   }
 
-  bool get isAuthenticated => _token != null;
-  String? get storeId => _storeId;
+  bool get isAuthenticated => _idToken != null && _storeId != null;
+  String? get storeId      => _storeId;
+  String? get uid          => _uid;
 
   // ── Headers ───────────────────────────────
 
-  Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Accept':       'application/json',
-        if (_token   != null) 'Authorization': 'Bearer $_token',
-        if (_storeId != null) 'X-Store-Id':    _storeId!,
-      };
+  Map<String, String> get _headers {
+    final h = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept':       'application/json',
+    };
+    if (_idToken != null && _idToken!.isNotEmpty) {
+      h['Authorization'] = 'Bearer $_idToken';
+    }
+    if (_storeId != null && _storeId!.isNotEmpty) {
+      h['X-Store-Id'] = _storeId!;
+    }
+    if (kDebugMode) {
+      debugPrint('[API] Headers — Auth: ${h.containsKey('Authorization') ? 'present' : 'MISSING'} '
+          'X-Store-Id: ${h['X-Store-Id'] ?? 'MISSING'}');
+    }
+    return h;
+  }
 
   // ── HTTP verbs ────────────────────────────
 
   Future<dynamic> get(String path, {Map<String, String>? query}) async {
     final uri = _buildUri(path, query);
     debugPrint('[API] GET $uri');
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(uri, headers: _headers)
+        .timeout(const Duration(seconds: 15));
     return _handle(res);
   }
 
   Future<dynamic> post(String path, Map<String, dynamic> body) async {
     final uri = _buildUri(path);
     debugPrint('[API] POST $uri');
-    final res = await http.post(uri,
-        headers: _headers, body: jsonEncode(body));
+    final res = await http
+        .post(uri, headers: _headers, body: jsonEncode(body))
+        .timeout(const Duration(seconds: 15));
     return _handle(res);
   }
 
   Future<dynamic> patch(String path, Map<String, dynamic> body) async {
     final uri = _buildUri(path);
     debugPrint('[API] PATCH $uri');
-    final res = await http.patch(uri,
-        headers: _headers, body: jsonEncode(body));
+    final res = await http
+        .patch(uri, headers: _headers, body: jsonEncode(body))
+        .timeout(const Duration(seconds: 15));
     return _handle(res);
   }
 
   Future<dynamic> delete(String path) async {
     final uri = _buildUri(path);
     debugPrint('[API] DELETE $uri');
-    final res = await http.delete(uri, headers: _headers);
+    final res = await http
+        .delete(uri, headers: _headers)
+        .timeout(const Duration(seconds: 15));
     return _handle(res);
+  }
+
+  // ── External GET (no auth headers) ────────
+
+  Future<dynamic> getExternal(String url) async {
+    try {
+      debugPrint('[API] GET (external) $url');
+      final res = await http.get(
+        Uri.parse(url),
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200 && res.body.isNotEmpty) {
+        return jsonDecode(res.body);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   // ── Helpers ───────────────────────────────
@@ -124,16 +174,16 @@ class ApiService {
       code    = body['error']?['code'];
     } catch (_) {}
 
+    debugPrint('[API] ERROR ${res.statusCode}: $message');
     throw ApiException(res.statusCode, message, code: code);
   }
 
-  // ── Date parser (handles ISO strings and Firestore maps) ─
+  // ── Date parser ───────────────────────────
+
   static DateTime? parseDate(dynamic val) {
     if (val == null) return null;
     if (val is String) return DateTime.tryParse(val);
-    if (val is int) {
-      return DateTime.fromMillisecondsSinceEpoch(val);
-    }
+    if (val is int)    return DateTime.fromMillisecondsSinceEpoch(val);
     if (val is Map) {
       final seconds = val['_seconds'] as int?;
       if (seconds != null) {

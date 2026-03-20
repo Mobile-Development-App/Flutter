@@ -1,3 +1,23 @@
-2026/03/19-15:45:37.232 5dd8 Reusing MANIFEST C:\Users\estiv\AppData\Local\Temp\flutter_tools.eb365deb\flutter_tools_chrome_device.47f6eb84\Default\Session Storage/MANIFEST-000001
-2026/03/19-15:45:37.233 5dd8 Recovering log #3
-2026/03/19-15:45:37.236 5dd8 Reusing old log C:\Users\estiv\AppData\Local\Temp\flutter_tools.eb365deb\flutter_tools_chrome_device.47f6eb84\Default\Session Storage/000003.log 
+2026/03/19-21:24:50.535 3cc4 Reusing MANIFEST C:\Users\estiv\AppData\Local\Temp\flutter_tools.5a749c57\flutter_tools_chrome_device.ea6c3d4f\Default\Session Storage/MANIFEST-000001
+2026/03/19-21:24:50.537 3cc4 Recovering log #13
+2026/03/19-21:24:50.540 3cc4 Reusing old log C:\Users\estiv\AppData\Local\Temp\flutter_tools.5a749c57\flutter_tools_chrome_device.ea6c3d4f\Default\Session Storage/000013.log 
+2026/03/19-21:24:50.541 3cc4 Delete type=0 #3
+2026/03/19-21:24:50.541 3cc4 Delete type=0 #4
+2026/03/19-21:32:56.893 7904 Level-0 table #17: started
+2026/03/19-21:32:56.898 7904 Level-0 table #17: 149217 bytes OK
+2026/03/19-21:32:56.900 7904 Delete type=0 #13
+2026/03/19-21:32:56.901 7904 Compacting 4@0 + 1@1 files
+2026/03/19-21:32:56.906 7904 Generated table #18@0: 113 keys, 147105 bytes
+2026/03/19-21:32:56.907 7904 Compacted 4@0 + 1@1 files => 147105 bytes
+2026/03/19-21:32:56.908 7904 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/03/19-21:32:56.908 7904 Delete type=2 #8
+2026/03/19-21:32:56.908 7904 Delete type=2 #10
+2026/03/19-21:32:56.908 7904 Delete type=2 #12
+2026/03/19-21:32:56.909 7904 Delete type=2 #14
+2026/03/19-21:32:56.909 7904 Delete type=2 #17
+2026/03/19-21:34:46.655 7904 Level-0 table #20: started
+2026/03/19-21:34:46.658 7904 Level-0 table #20: 51053 bytes OK
+2026/03/19-21:34:46.660 7904 Delete type=0 #16
+2026/03/19-21:36:39.724 7904 Level-0 table #22: started
+2026/03/19-21:36:39.729 7904 Level-0 table #22: 50272 bytes OK
+2026/03/19-21:36:39.730 7904 Delete type=0 #19

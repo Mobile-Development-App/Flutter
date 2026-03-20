@@ -5,7 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
-import '../../models/mock_data.dart';
+import '../../models/analytics_data.dart';
 import '../../models/store.dart';
 import '../../models/employee.dart';
 import '../../providers/providers.dart';
@@ -209,8 +209,9 @@ class _StoreDetailScreenState
     final isDark = context.isDark;
     final storeState = ref.watch(storeProvider).value;
     final invState = ref.watch(inventoryProvider).value;
+    final analyticsState = ref.watch(analyticsProvider).value;
     final s = widget.store;
-    final salesData = MockData.generateSalesData(days: 7);
+    final salesData = analyticsState?.salesData ?? [];
 
     return Scaffold(
       backgroundColor:
@@ -362,10 +363,9 @@ class _StoreDetailScreenState
     );
   }
 
-  Widget _overviewTab(Store s, salesData, bool isDark) {
-    final spots = (salesData as List).asMap().entries.map((e) {
-      return FlSpot(e.key.toDouble(),
-          (e.value.sales as double) / 1000000);
+  Widget _overviewTab(Store s, List<SalesDataPoint> salesData, bool isDark) {
+    final spots = salesData.asMap().entries.map((e) {
+      return FlSpot(e.key.toDouble(), e.value.sales / 1000000);
     }).toList();
 
     return Column(
@@ -378,6 +378,15 @@ class _StoreDetailScreenState
               Text('Tendencia de Ventas',
                   style: AppTypography.headline),
               const SizedBox(height: 12),
+              if (spots.isEmpty)
+                Container(
+                  height: 100,
+                  alignment: Alignment.center,
+                  child: Text('Sin datos de ventas',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textTertiary)),
+                )
+              else
               SizedBox(
                 height: 150,
                 child: LineChart(LineChartData(
@@ -451,13 +460,13 @@ class _StoreDetailScreenState
     );
   }
 
-  Widget _analyticsTab(salesData, Store s, bool isDark) {
-    final spots = (salesData as List).asMap().entries.map((e) {
+  Widget _analyticsTab(List<SalesDataPoint> salesData, Store s, bool isDark) {
+    final spots = salesData.asMap().entries.map((e) {
       return BarChartGroupData(
         x: e.key,
         barRods: [
           BarChartRodData(
-            toY: (e.value.sales as double) / 1000000,
+            toY: e.value.sales / 1000000,
             color: AppColors.deepSpaceBlue.withValues(alpha: 0.7),
             width: 16,
             borderRadius: BorderRadius.circular(4),
@@ -476,6 +485,15 @@ class _StoreDetailScreenState
               Text('Ventas vs Pedidos',
                   style: AppTypography.headline),
               const SizedBox(height: 12),
+              if (spots.isEmpty)
+                Container(
+                  height: 100,
+                  alignment: Alignment.center,
+                  child: Text('Sin datos de ventas',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textTertiary)),
+                )
+              else
               SizedBox(
                 height: 180,
                 child: BarChart(BarChartData(

@@ -1,3 +1,7 @@
-2026/03/19-15:45:37.238 4460 Reusing MANIFEST C:\Users\estiv\AppData\Local\Temp\flutter_tools.eb365deb\flutter_tools_chrome_device.47f6eb84\Default\shared_proto_db/MANIFEST-000001
-2026/03/19-15:45:37.238 4460 Recovering log #3
-2026/03/19-15:45:37.239 4460 Reusing old log C:\Users\estiv\AppData\Local\Temp\flutter_tools.eb365deb\flutter_tools_chrome_device.47f6eb84\Default\shared_proto_db/000003.log 
+2026/03/19-21:24:50.540 69f8 Reusing MANIFEST C:\Users\estiv\AppData\Local\Temp\flutter_tools.5a749c57\flutter_tools_chrome_device.ea6c3d4f\Default\shared_proto_db/MANIFEST-000001
+2026/03/19-21:24:50.541 69f8 Recovering log #4
+2026/03/19-21:24:50.542 69f8 Reusing old log C:\Users\estiv\AppData\Local\Temp\flutter_tools.5a749c57\flutter_tools_chrome_device.ea6c3d4f\Default\shared_proto_db/000004.log 
+2026/03/19-21:24:50.543 69f8 Delete type=0 #3
+2026/03/19-21:25:02.907 7f34 Level-0 table #8: started
+2026/03/19-21:25:02.910 7f34 Level-0 table #8: 135444 bytes OK
+2026/03/19-21:25:02.911 7f34 Delete type=0 #4

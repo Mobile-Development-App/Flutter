@@ -307,6 +307,28 @@ class _AnalyticsScreenState
 
   Widget _stockLevelsChart(AnalyticsState state, bool isDark) {
     final data = state.stockLevelData;
+
+    if (data.isEmpty) {
+      return AppCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Niveles de Stock', style: AppTypography.headline),
+          const SizedBox(height: 40),
+          Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.bar_chart_rounded,
+                  color: AppColors.textTertiary, size: 36),
+              const SizedBox(height: 8),
+              Text('Agrega productos para ver este gráfico',
+                  style: AppTypography.caption
+                      .copyWith(color: AppColors.textTertiary)),
+            ]),
+          ),
+          const SizedBox(height: 40),
+        ]),
+      );
+    }
+
     return AppCard(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -329,13 +351,19 @@ class _AnalyticsScreenState
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
+                    reservedSize: 28,
                     getTitlesWidget: (v, _) {
                       final i = v.toInt();
                       if (i >= 0 && i < data.length) {
+                        // Safe truncation — never crash on short strings
+                        final cat = data[i].category;
+                        final label = cat.length > 4
+                            ? cat.substring(0, 4)
+                            : cat;
                         return Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            data[i].category.substring(0, 3),
+                            label,
                             style: const TextStyle(
                                 fontSize: 9,
                                 color: AppColors.textSecondary),
@@ -351,6 +379,7 @@ class _AnalyticsScreenState
                 final d = e.value;
                 return BarChartGroupData(
                   x: e.key,
+                  groupVertically: false,
                   barRods: [
                     BarChartRodData(
                         toY: d.inStock.toDouble(),
@@ -388,59 +417,89 @@ class _AnalyticsScreenState
     );
   }
 
-  Widget _categoryDistributionChart(
-      AnalyticsState state, bool isDark) {
+  Widget _categoryDistributionChart(AnalyticsState state, bool isDark) {
     final dist = state.categoryDistribution;
+
+    if (dist.isEmpty) {
+      return AppCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Distribución por Categoría', style: AppTypography.headline),
+          const SizedBox(height: 40),
+          Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.pie_chart_outline_rounded,
+                  color: AppColors.textTertiary, size: 36),
+              const SizedBox(height: 8),
+              Text('Agrega productos para ver este gráfico',
+                  style: AppTypography.caption
+                      .copyWith(color: AppColors.textTertiary)),
+            ]),
+          ),
+          const SizedBox(height: 40),
+        ]),
+      );
+    }
+
+    // Palette for pie slices — cycles through if more categories than colors
+    const palette = [
+      AppColors.freshSky, AppColors.success, AppColors.warning,
+      AppColors.deepSpaceBlue, AppColors.error, AppColors.teaGreen,
+      Color(0xFF9B59B6), Color(0xFFE67E22), Color(0xFF1ABC9C),
+      Color(0xFF34495E),
+    ];
+
     return AppCard(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Distribución por Categoría',
-              style: AppTypography.headline),
+          Text('Distribución por Categoría', style: AppTypography.headline),
           const SizedBox(height: 16),
           SizedBox(
             height: 200,
             child: PieChart(PieChartData(
               sections: dist.asMap().entries.map((e) {
+                final color = palette[e.key % palette.length];
                 return PieChartSectionData(
                   value: e.value.count.toDouble(),
-                  color: _categoryColor(e.value.category),
+                  color: color,
                   radius: 70,
-                  title: '',
+                  title: e.value.count > 0
+                      ? '${e.value.percentage.toStringAsFixed(0)}%'
+                      : '',
+                  titleStyle: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white),
                 );
               }).toList(),
-              centerSpaceRadius: 50,
+              centerSpaceRadius: 40,
               sectionsSpace: 2,
             )),
           ),
           const SizedBox(height: 16),
-          ...dist.map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color:
-                            _categoryColor(item.category),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(item.category,
-                          style: AppTypography.caption),
-                    ),
-                    Text(
-                      '${item.count} (${item.percentage.percentFormatted})',
-                      style: AppTypography.caption.copyWith(
-                          color: AppColors.textSecondary),
-                    ),
-                  ],
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: dist.asMap().entries.map((e) {
+              final color = palette[e.key % palette.length];
+              return Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                      color: color, shape: BoxShape.circle),
                 ),
-              )),
+                const SizedBox(width: 5),
+                Text(
+                  '${e.value.category} (${e.value.count})',
+                  style: AppTypography.caption
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ]);
+            }).toList(),
+          ),
         ],
       ),
     );
@@ -463,15 +522,4 @@ class _AnalyticsScreenState
     );
   }
 
-  Color _categoryColor(String category) {
-    const map = {
-      'Bebidas': AppColors.freshSky,
-      'Lácteos': AppColors.info,
-      'Snacks': AppColors.warning,
-      'Limpieza': AppColors.teaGreen,
-      'Granos': Colors.brown,
-      'Cuidado Personal': Colors.pink,
-    };
-    return map[category] ?? AppColors.textSecondary;
-  }
 }

@@ -25,6 +25,8 @@ class AuthState {
   final String signUpPassword;
   final String signUpConfirmPassword;
   final String signUpStoreName;
+  final String signUpStoreAddress;
+  final String signUpStorePhone;
   final bool signUpAcceptedTerms;
   final String? signUpError;
   final bool isSigningUp;
@@ -45,6 +47,8 @@ class AuthState {
     this.signUpPassword = '',
     this.signUpConfirmPassword = '',
     this.signUpStoreName = '',
+    this.signUpStoreAddress = '',
+    this.signUpStorePhone = '',
     this.signUpAcceptedTerms = false,
     this.signUpError,
     this.isSigningUp = false,
@@ -67,7 +71,7 @@ class AuthState {
       signUpStoreName.isNotEmpty &&
       signUpAcceptedTerms;
 
-  bool get passwordsMatch => signUpPassword == signUpConfirmPassword;
+  bool get passwordsMatch    => signUpPassword == signUpConfirmPassword;
   bool get passwordLengthValid => signUpPassword.length >= 8;
 
   AuthState copyWith({
@@ -85,6 +89,8 @@ class AuthState {
     String? signUpPassword,
     String? signUpConfirmPassword,
     String? signUpStoreName,
+    String? signUpStoreAddress,
+    String? signUpStorePhone,
     bool? signUpAcceptedTerms,
     String? signUpError,
     bool clearSignUpError = false,
@@ -95,27 +101,25 @@ class AuthState {
     bool clearForgotError = false,
   }) =>
       AuthState(
-        isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-        hasCompletedOnboarding:
-            hasCompletedOnboarding ?? this.hasCompletedOnboarding,
-        currentUser: clearUser ? null : (currentUser ?? this.currentUser),
-        loginEmail: loginEmail ?? this.loginEmail,
+        isAuthenticated:        isAuthenticated ?? this.isAuthenticated,
+        hasCompletedOnboarding: hasCompletedOnboarding ?? this.hasCompletedOnboarding,
+        currentUser:  clearUser ? null : (currentUser ?? this.currentUser),
+        loginEmail:   loginEmail   ?? this.loginEmail,
         loginPassword: loginPassword ?? this.loginPassword,
-        loginError:
-            clearLoginError ? null : (loginError ?? this.loginError),
-        isLoggingIn: isLoggingIn ?? this.isLoggingIn,
-        signUpName: signUpName ?? this.signUpName,
-        signUpEmail: signUpEmail ?? this.signUpEmail,
+        loginError:   clearLoginError ? null : (loginError ?? this.loginError),
+        isLoggingIn:  isLoggingIn  ?? this.isLoggingIn,
+        signUpName:   signUpName   ?? this.signUpName,
+        signUpEmail:  signUpEmail  ?? this.signUpEmail,
         signUpPassword: signUpPassword ?? this.signUpPassword,
-        signUpConfirmPassword:
-            signUpConfirmPassword ?? this.signUpConfirmPassword,
-        signUpStoreName: signUpStoreName ?? this.signUpStoreName,
+        signUpConfirmPassword: signUpConfirmPassword ?? this.signUpConfirmPassword,
+        signUpStoreName:    signUpStoreName    ?? this.signUpStoreName,
+        signUpStoreAddress: signUpStoreAddress ?? this.signUpStoreAddress,
+        signUpStorePhone:   signUpStorePhone   ?? this.signUpStorePhone,
         signUpAcceptedTerms: signUpAcceptedTerms ?? this.signUpAcceptedTerms,
-        signUpError:
-            clearSignUpError ? null : (signUpError ?? this.signUpError),
-        isSigningUp: isSigningUp ?? this.isSigningUp,
+        signUpError:  clearSignUpError ? null : (signUpError ?? this.signUpError),
+        isSigningUp:  isSigningUp  ?? this.isSigningUp,
         forgotPasswordEmail: forgotPasswordEmail ?? this.forgotPasswordEmail,
-        forgotPasswordSent: forgotPasswordSent ?? this.forgotPasswordSent,
+        forgotPasswordSent:  forgotPasswordSent  ?? this.forgotPasswordSent,
         forgotPasswordError: clearForgotError
             ? null
             : (forgotPasswordError ?? this.forgotPasswordError),
@@ -124,9 +128,21 @@ class AuthState {
 
 // ─────────────────────────────────────────────
 // AuthNotifier
-// Flow:
-//   LOGIN:    FirebaseAuth.signInWithEmailAndPassword → uid → POST /auth/login
-//   REGISTER: POST /auth/register → FirebaseAuth.signInWithEmailAndPassword
+//
+// LOGIN flow:
+//   1. FirebaseAuth.signInWithEmailAndPassword  → fbUser
+//   2. fbUser.getIdToken()                      → idToken (JWT)
+//   3. POST /auth/login { uid }                 → { uid, storeId, name, role }
+//   4. ApiService.setAuth(idToken, storeId)     → headers ready
+//
+// REGISTER flow:
+//   1. POST /auth/register { name, email, password, storeName }
+//   2. FirebaseAuth.signInWithEmailAndPassword  → fbUser
+//   3. fbUser.getIdToken()                      → idToken (JWT)
+//   4. ApiService.setAuth(idToken, storeId)     → headers ready
+//
+// TOKEN REFRESH:
+//   On app restart → Firebase re-signs silently → fresh idToken
 // ─────────────────────────────────────────────
 class AuthNotifier extends AsyncNotifier<AuthState> {
   final _api    = ApiService.shared;
@@ -140,60 +156,98 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     final prefs     = await SharedPreferences.getInstance();
     final onboarded = prefs.getBool(_onboardingKey) ?? false;
 
-    final hasToken = await _api.restoreAuth();
-    if (!hasToken) {
+    // Check if Firebase still has a logged-in user
+    final fbUser = _fbAuth.currentUser;
+    if (fbUser == null) {
+      debugPrint('[AUTH] No Firebase session — showing login');
       return AuthState(hasCompletedOnboarding: onboarded);
     }
 
-    final cached = prefs.getString(_userCacheKey);
-    if (cached != null) {
-      try {
-        final user =
-            User.fromJson(jsonDecode(cached) as Map<String, dynamic>);
-        return AuthState(
-          isAuthenticated: true,
-          hasCompletedOnboarding: onboarded,
-          currentUser: user,
-        );
-      } catch (_) {}
-    }
+    // Refresh the ID token (Firebase handles expiry automatically)
+    try {
+      final idToken = await fbUser.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        debugPrint('[AUTH] Could not get ID token — showing login');
+        return AuthState(hasCompletedOnboarding: onboarded);
+      }
 
-    return AuthState(
-      isAuthenticated: true,
-      hasCompletedOnboarding: onboarded,
-    );
+      // Restore storeId from local cache
+      final prefs2   = await SharedPreferences.getInstance();
+      final storeId  = prefs2.getString('inventaria_store_id') ?? '';
+
+      if (storeId.isEmpty) {
+        debugPrint('[AUTH] No storeId cached — need to re-login');
+        return AuthState(hasCompletedOnboarding: onboarded);
+      }
+
+      // Set fresh token in ApiService so all requests work
+      await _api.setAuth(idToken, storeId, uid: fbUser.uid);
+      debugPrint('[AUTH] Session restored — uid: ${fbUser.uid} storeId: $storeId');
+
+      // Load cached user profile
+      final cached = prefs2.getString(_userCacheKey);
+      if (cached != null) {
+        try {
+          final user = User.fromJson(jsonDecode(cached) as Map<String, dynamic>);
+          return AuthState(
+            isAuthenticated: true,
+            hasCompletedOnboarding: onboarded,
+            currentUser: user,
+          );
+        } catch (_) {}
+      }
+
+      return AuthState(
+        isAuthenticated: true,
+        hasCompletedOnboarding: onboarded,
+      );
+    } catch (e) {
+      debugPrint('[AUTH] Session restore error: $e');
+      return AuthState(hasCompletedOnboarding: onboarded);
+    }
   }
 
   // ── Login ─────────────────────────────────
+
   Future<void> login() async {
     final s = state.value;
     if (s == null || !s.isLoginValid) return;
     _update((c) => c.copyWith(isLoggingIn: true, clearLoginError: true));
 
     try {
-      // Step 1 — Firebase Auth SDK
-      debugPrint('[AUTH] Signing in with Firebase: ${s.loginEmail}');
+      // Step 1 — Firebase Auth → get fbUser
+      debugPrint('[AUTH] Step 1: Firebase signIn for ${s.loginEmail}');
       final credential = await _fbAuth.signInWithEmailAndPassword(
         email:    s.loginEmail.trim(),
         password: s.loginPassword,
       );
+      final fbUser = credential.user;
+      if (fbUser == null) throw Exception('Firebase no devolvió usuario');
 
-      final uid = credential.user?.uid;
-      if (uid == null || uid.isEmpty) {
-        throw Exception('Firebase no devolvió un UID válido');
+      // Step 2 — Get Firebase ID Token (real JWT, not uid)
+      debugPrint('[AUTH] Step 2: Getting Firebase ID Token');
+      final idToken = await fbUser.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('No se pudo obtener el ID Token de Firebase');
       }
-      debugPrint('[AUTH] Firebase OK — uid: $uid');
+      debugPrint('[AUTH] ID Token obtained (${idToken.length} chars)');
 
-      // Step 2 — Backend exchange
-      debugPrint('[AUTH] Calling backend /auth/login with uid');
-      final body = await _api.post(kAuthLogin, {'uid': uid})
+      // Step 3 — Exchange uid with our backend → get storeId + user data
+      debugPrint('[AUTH] Step 3: POST /auth/login with uid: ${fbUser.uid}');
+      final body = await _api.post(kAuthLogin, {'uid': fbUser.uid})
           as Map<String, dynamic>;
-      debugPrint('[AUTH] Backend OK — storeId: ${body['storeId']}');
+      debugPrint('[AUTH] Backend response: $body');
 
       final storeId = body['storeId'] as String? ?? '';
-      final user    = User.fromBackendJson(body);
+      if (storeId.isEmpty) {
+        throw Exception('El backend no devolvió storeId');
+      }
 
-      await _api.setAuth(uid, storeId);
+      // Step 4 — Store ID Token (not uid) as the auth token
+      await _api.setAuth(idToken, storeId, uid: fbUser.uid);
+      debugPrint('[AUTH] Login complete — storeId: $storeId');
+
+      final user = User.fromBackendJson(body);
       await _saveUserCache(user);
       await HapticManager.success();
 
@@ -203,61 +257,70 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
             currentUser: user,
           ));
     } on fb.FirebaseAuthException catch (e) {
-      debugPrint('[AUTH] FirebaseAuthException: code=${e.code} msg=${e.message}');
+      debugPrint('[AUTH] FirebaseAuthException: ${e.code} — ${e.message}');
       await HapticManager.error();
       _update((c) => c.copyWith(
             isLoggingIn: false,
             loginError: _mapFirebaseError(e.code),
           ));
     } on ApiException catch (e) {
-      debugPrint('[AUTH] ApiException: status=${e.statusCode} msg=${e.message}');
+      debugPrint('[AUTH] ApiException: ${e.statusCode} — ${e.message}');
       await HapticManager.error();
       _update((c) => c.copyWith(
             isLoggingIn: false,
             loginError: _mapApiError(e),
           ));
     } catch (e, stack) {
-      // Log the REAL error so we can debug it
-      debugPrint('[AUTH] Unexpected error: $e');
-      debugPrint('[AUTH] Stack: $stack');
+      debugPrint('[AUTH] Unexpected error: $e\n$stack');
       await HapticManager.error();
       _update((c) => c.copyWith(
             isLoggingIn: false,
-            // Show real error in debug, generic in release
-            loginError: kDebugMode
-                ? 'Error: $e'
-                : 'Error de conexión. Verifica tu internet.',
+            loginError: kDebugMode ? 'Error: $e' : 'Error de conexión.',
           ));
     }
   }
 
   // ── Register ──────────────────────────────
+
   Future<void> signUp() async {
     final s = state.value;
     if (s == null || !s.isSignUpValid) return;
     _update((c) => c.copyWith(isSigningUp: true, clearSignUpError: true));
 
     try {
-      debugPrint('[AUTH] Registering via backend: ${s.signUpEmail}');
+      // Step 1 — Backend creates Firebase Auth user + Firestore docs
+      debugPrint('[AUTH] Step 1: POST /auth/register');
       final body = await _api.post(kAuthRegister, {
-        'name':      s.signUpName,
-        'email':     s.signUpEmail,
-        'password':  s.signUpPassword,
-        'storeName': s.signUpStoreName,
+        'name':         s.signUpName.trim(),
+        'email':        s.signUpEmail.trim(),
+        'password':     s.signUpPassword,
+        'storeName':    s.signUpStoreName.trim(),
+        if (s.signUpStoreAddress.isNotEmpty)
+          'storeAddress': s.signUpStoreAddress.trim(),
+        if (s.signUpStorePhone.isNotEmpty)
+          'storePhone':   s.signUpStorePhone.trim(),
       }) as Map<String, dynamic>;
 
       final storeId = body['storeId'] as String? ?? '';
-      final uid     = body['uid']     as String? ?? '';
-      debugPrint('[AUTH] Register OK — uid=$uid storeId=$storeId');
+      debugPrint('[AUTH] Register OK — storeId: $storeId');
 
-      // Sign in with Firebase SDK to get a valid session
-      await _fbAuth.signInWithEmailAndPassword(
+      // Step 2 — Sign in to get real Firebase session + ID Token
+      debugPrint('[AUTH] Step 2: Firebase signIn after register');
+      final credential = await _fbAuth.signInWithEmailAndPassword(
         email:    s.signUpEmail.trim(),
         password: s.signUpPassword,
       );
+      final fbUser = credential.user!;
 
+      // Step 3 — Get Firebase ID Token
+      final idToken = await fbUser.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('No se pudo obtener el ID Token tras registro');
+      }
+      debugPrint('[AUTH] ID Token obtained after register');
+
+      await _api.setAuth(idToken, storeId, uid: fbUser.uid);
       final user = User.fromBackendJson(body);
-      await _api.setAuth(uid, storeId);
       await _saveUserCache(user);
       await HapticManager.success();
 
@@ -281,32 +344,32 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
             signUpError: _mapApiError(e),
           ));
     } catch (e, stack) {
-      debugPrint('[AUTH] Unexpected signUp error: $e');
-      debugPrint('[AUTH] Stack: $stack');
+      debugPrint('[AUTH] Unexpected signUp error: $e\n$stack');
       _update((c) => c.copyWith(
             isSigningUp: false,
-            signUpError: kDebugMode
-                ? 'Error: $e'
-                : 'Error de conexión. Verifica tu internet.',
+            signUpError: kDebugMode ? 'Error: $e' : 'Error de conexión.',
           ));
     }
   }
 
   // ── Password Reset ────────────────────────
+
   Future<void> sendPasswordReset() async {
     final s = state.value;
     if (s == null ||
         s.forgotPasswordEmail.isEmpty ||
         !s.forgotPasswordEmail.contains('@')) {
       _update((c) => c.copyWith(
-            forgotPasswordError: 'Ingresa un correo electrónico válido'));
+          forgotPasswordError: 'Ingresa un correo electrónico válido'));
       return;
     }
     try {
       await _fbAuth.sendPasswordResetEmail(
           email: s.forgotPasswordEmail.trim());
-      _update((c) =>
-          c.copyWith(forgotPasswordSent: true, clearForgotError: true));
+      _update((c) => c.copyWith(
+            forgotPasswordSent: true,
+            clearForgotError: true,
+          ));
     } on fb.FirebaseAuthException catch (e) {
       _update((c) =>
           c.copyWith(forgotPasswordError: _mapFirebaseError(e.code)));
@@ -317,6 +380,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   // ── Onboarding ────────────────────────────
+
   Future<void> completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingKey, true);
@@ -324,6 +388,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   // ── Logout ────────────────────────────────
+
   Future<void> logout() async {
     try { await _api.post(kAuthLogout, {}); } catch (_) {}
     try { await _fbAuth.signOut(); } catch (_) {}
@@ -337,23 +402,27 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           loginPassword: '',
           clearLoginError: true,
         ));
+    debugPrint('[AUTH] Logged out');
   }
 
   // ── Field setters ─────────────────────────
+
   void setLoginEmail(String v) =>
       _update((s) => s.copyWith(loginEmail: v, clearLoginError: true));
   void setLoginPassword(String v) =>
       _update((s) => s.copyWith(loginPassword: v, clearLoginError: true));
-  void setSignUpName(String v) =>
-      _update((s) => s.copyWith(signUpName: v));
-  void setSignUpEmail(String v) =>
-      _update((s) => s.copyWith(signUpEmail: v));
+  void setSignUpName(String v) => _update((s) => s.copyWith(signUpName: v));
+  void setSignUpEmail(String v) => _update((s) => s.copyWith(signUpEmail: v));
   void setSignUpPassword(String v) =>
       _update((s) => s.copyWith(signUpPassword: v));
   void setSignUpConfirmPassword(String v) =>
       _update((s) => s.copyWith(signUpConfirmPassword: v));
   void setSignUpStoreName(String v) =>
       _update((s) => s.copyWith(signUpStoreName: v));
+  void setSignUpStoreAddress(String v) =>
+      _update((s) => s.copyWith(signUpStoreAddress: v));
+  void setSignUpStorePhone(String v) =>
+      _update((s) => s.copyWith(signUpStorePhone: v));
   void setSignUpAcceptedTerms(bool v) =>
       _update((s) => s.copyWith(signUpAcceptedTerms: v));
   void setForgotPasswordEmail(String v) =>
@@ -366,11 +435,14 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         signUpPassword: '',
         signUpConfirmPassword: '',
         signUpStoreName: '',
+        signUpStoreAddress: '',
+        signUpStorePhone: '',
         signUpAcceptedTerms: false,
         clearSignUpError: true,
       ));
 
   // ── Private ───────────────────────────────
+
   void _update(AuthState Function(AuthState) fn) {
     final current = state.value;
     if (current != null) state = AsyncData(fn(current));
@@ -404,7 +476,6 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       case 'operation-not-allowed':
         return 'Método de login no habilitado en Firebase Console.';
       default:
-        // En debug mostramos el código real para poder diagnosticar
         return kDebugMode
             ? 'Firebase error: $code'
             : 'Error de autenticación. Intenta de nuevo.';
@@ -413,14 +484,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   String _mapApiError(ApiException e) {
     switch (e.statusCode) {
-      case 401:
-        return 'Credenciales inválidas.';
-      case 404:
-        return 'No se encontró la cuenta en el sistema.';
-      case 409:
-        return 'Ya existe una cuenta con este correo.';
-      default:
-        return e.message.isNotEmpty ? e.message : 'Error inesperado.';
+      case 401: return 'Sesión inválida. Vuelve a iniciar sesión.';
+      case 404: return 'No se encontró la cuenta en el sistema.';
+      case 409: return 'Ya existe una cuenta con este correo.';
+      default:  return e.message.isNotEmpty ? e.message : 'Error inesperado.';
     }
   }
 }

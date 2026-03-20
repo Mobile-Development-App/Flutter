@@ -16,9 +16,9 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailCtrl = TextEditingController();
+  final _emailCtrl    = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  bool _showPassword = false;
+  bool _showPassword  = false;
 
   @override
   void dispose() {
@@ -34,15 +34,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
-    final authState =
-        ref.watch(authProvider).value;
+    final isDark      = context.isDark;
+    final authState   = ref.watch(authProvider).value;
     final isLoggingIn = authState?.isLoggingIn ?? false;
-    final loginError = authState?.loginError;
+    final loginError  = authState?.loginError;
 
     return Scaffold(
       backgroundColor:
-          isDark ? AppColors.darkBackground : AppColors.surface,
+          isDark ? AppColors.darkBackground : const Color(0xFFF0F4F8),
       body: SafeArea(
         child: SingleChildScrollView(
           keyboardDismissBehavior:
@@ -50,31 +49,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              const SizedBox(height: 48),
-              // Logo
+              const SizedBox(height: 40),
+
+              // ── Logo ────────────────────────────────
               Column(
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppColors.deepSpaceBlue
-                          .withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.inventory_2_rounded,
-                      size: 36,
-                      color: AppColors.deepSpaceBlue,
-                    ),
+                  // Real logo image
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.contain,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Text(
                     'InventarIA',
                     style: AppTypography.largeTitle.copyWith(
                       color: isDark
                           ? AppColors.darkTextPrimary
                           : AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -85,8 +80,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 40),
-              // Email
+
+              // ── Email ──────────────────────────────
               _formField(
                 label: 'Correo electrónico',
                 controller: _emailCtrl,
@@ -96,59 +93,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 isDark: isDark,
               ),
               const SizedBox(height: 16),
-              // Password
+
+              // ── Password ───────────────────────────
               _passwordField(isDark: isDark),
-              const SizedBox(height: 8),
-              // Forgot password
+              const SizedBox(height: 4),
+
+              // ── Forgot password ────────────────────
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => _showForgotPassword(context),
                   child: Text(
                     '¿Olvidaste tu contraseña?',
-                    style: AppTypography.caption.copyWith(
-                        color: AppColors.deepSpaceBlue),
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.deepSpaceBlue),
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              // Error
-              if (loginError != null)
+              const SizedBox(height: 4),
+
+              // ── Error banner ───────────────────────
+              if (loginError != null) ...[
                 Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color:
-                        AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.25)),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_rounded,
-                          color: AppColors.error, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(loginError,
-                            style: AppTypography.caption.copyWith(
-                                color: AppColors.error)),
-                      ),
-                    ],
-                  ),
+                  child: Row(children: [
+                    const Icon(Icons.error_rounded,
+                        color: AppColors.error, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(loginError,
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.error)),
+                    ),
+                  ]),
                 ),
-              // Login button
+              ],
+
+              // ── Login button ───────────────────────
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: (_isValid && !isLoggingIn)
                       ? () {
                           context.hideKeyboard();
-                          final notifier = ref
-                              .read(authProvider.notifier);
-                          notifier.setLoginEmail(
-                              _emailCtrl.text);
-                          notifier.setLoginPassword(
-                              _passwordCtrl.text);
-                          notifier.login();
+                          final n = ref.read(authProvider.notifier);
+                          n.setLoginEmail(_emailCtrl.text);
+                          n.setLoginPassword(_passwordCtrl.text);
+                          n.login();
                         }
                       : null,
                   style: primaryButtonStyle,
@@ -157,39 +155,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.inkBlack),
+                              strokeWidth: 2, color: AppColors.inkBlack),
                         )
                       : const Text('Iniciar Sesión'),
                 ),
               ),
-              const SizedBox(height: 24),
-              // Demo hint
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.deepSpaceBlue
-                      .withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Credenciales de demostración:',
-                      style: AppTypography.caption2
-                          .copyWith(color: AppColors.textTertiary),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'demo@inventory.com / demo123',
-                      style: AppTypography.caption2.copyWith(
-                          color: AppColors.deepSpaceBlue),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Sign up link
+
+              const SizedBox(height: 20),
+
+              // ── Sign up link ───────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -240,32 +214,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 : AppColors.surfaceSecondary,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 14),
-                child: Icon(icon,
-                    color: AppColors.textTertiary, size: 18),
-              ),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  keyboardType: keyboardType,
-                  autocorrect: false,
-                  textCapitalization: TextCapitalization.none,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: placeholder,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 14),
-                  ),
+          child: Row(children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 14),
+              child:
+                  Icon(icon, color: AppColors.textTertiary, size: 18),
+            ),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                keyboardType: keyboardType,
+                autocorrect: false,
+                textCapitalization: TextCapitalization.none,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: placeholder,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 14),
                 ),
               ),
-            ],
-          ),
+            ),
+          ]),
         ),
       ],
     );
@@ -286,41 +258,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 : AppColors.surfaceSecondary,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 14),
-                child: Icon(Icons.lock_outline_rounded,
-                    color: AppColors.textTertiary, size: 18),
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _passwordCtrl,
-                  obscureText: !_showPassword,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    hintText: '••••••••',
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 14),
-                  ),
+          child: Row(children: [
+            const Padding(
+              padding: EdgeInsets.only(left: 14),
+              child: Icon(Icons.lock_outline_rounded,
+                  color: AppColors.textTertiary, size: 18),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _passwordCtrl,
+                obscureText: !_showPassword,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  hintText: '••••••••',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 14),
                 ),
               ),
-              IconButton(
-                onPressed: () =>
-                    setState(() => _showPassword = !_showPassword),
-                icon: Icon(
-                  _showPassword
-                      ? Icons.visibility_off_rounded
-                      : Icons.visibility_rounded,
-                  color: AppColors.textTertiary,
-                  size: 18,
-                ),
+            ),
+            IconButton(
+              onPressed: () =>
+                  setState(() => _showPassword = !_showPassword),
+              icon: Icon(
+                _showPassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: AppColors.textTertiary,
+                size: 18,
               ),
-            ],
-          ),
+            ),
+          ]),
         ),
       ],
     );

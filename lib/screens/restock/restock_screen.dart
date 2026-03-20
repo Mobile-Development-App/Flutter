@@ -104,6 +104,7 @@ class _RestockScreenState extends ConsumerState<RestockScreen> {
 
   Widget _summaryCard(invState) {
     final stats = invState?.dashboardStats;
+    final aiAsync = ref.watch(restockAiSuggestionsProvider);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -162,6 +163,87 @@ class _RestockScreenState extends ConsumerState<RestockScreen> {
                 AppColors.error,
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          aiAsync.when(
+            loading: () => Row(
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Analizando mejores decisiones...',
+                  style: AppTypography.caption.copyWith(color: Colors.white70),
+                ),
+              ],
+            ),
+            error: (_, __) => Text(
+              'No se pudo conectar a la IA. Mostrando sugerencias básicas.',
+              style: AppTypography.caption.copyWith(color: Colors.white70),
+            ),
+            data: (s) {
+              if (s.cards.isEmpty) return const SizedBox.shrink();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.isAi ? 'Recomendaciones IA' : 'Sugerencias',
+                    style: AppTypography.caption.copyWith(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...s.cards.take(3).map(
+                    (c) => Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(
+                          alpha: c.isCritical ? 0.10 : 0.07,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha: c.isCritical ? 0.20 : 0.12,
+                          ),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            c.title,
+                            style: AppTypography.caption.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            c.body,
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption2.copyWith(
+                              color: Colors.white70,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),

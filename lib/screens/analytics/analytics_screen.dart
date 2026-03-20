@@ -1,525 +1,1152 @@
+import 'dart:math' as math;
+
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../models/product.dart';
 import '../../providers/providers.dart';
-import '../../providers/analytics_provider.dart';
-import '../../widgets/widgets.dart';
+import '../../widgets/app_card.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
 
   @override
-  ConsumerState<AnalyticsScreen> createState() =>
-      _AnalyticsScreenState();
+  ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState
-    extends ConsumerState<AnalyticsScreen> {
+class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
+  int _selectedRange = 0;
+
+  static const List<String> _ranges = ['7d', '30d', '90d', '1a'];
+
+  int get _selectedDays {
+    switch (_selectedRange) {
+      case 0:
+        return 7;
+      case 1:
+        return 30;
+      case 2:
+        return 90;
+      case 3:
+        return 365;
+      default:
+        return 7;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
-    final state = ref.watch(analyticsProvider).value;
+    final inventoryAsync = ref.watch(inventoryProvider);
 
     return Scaffold(
-      backgroundColor:
-          isDark ? AppColors.darkBackground : AppColors.background,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
       appBar: AppBar(
         title: const Text('Analítica'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.upload_rounded),
-            onPressed: () => ref
-                .read(analyticsProvider.notifier)
-                .exportReport(),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Icon(Icons.file_upload_outlined),
           ),
         ],
       ),
-      body: state == null
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _timeRangeSelector(state, isDark),
-                  const SizedBox(height: 20),
-                  _summaryStats(state, isDark),
-                  const SizedBox(height: 20),
-                  _salesTrendChart(state, isDark),
-                  const SizedBox(height: 20),
-                  _stockLevelsChart(state, isDark),
-                  const SizedBox(height: 20),
-                  _categoryDistributionChart(state, isDark),
-                  const SizedBox(height: 100),
-                ],
-              ),
+      body: inventoryAsync.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        error: (error, stack) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Error cargando analítica:\n$error',
+              textAlign: TextAlign.center,
             ),
+          ),
+        ),
+        data: (inventoryState) {
+          final products = inventoryState.products;
+
+          final totalSaleValue =
+              products.fold<double>(0, (sum, p) => sum + p.stockValue);
+          final totalCostValue =
+              products.fold<double>(0, (sum, p) => sum + p.costValue);
+          final totalProfitValue =
+              products.fold<double>(0, (sum, p) => sum + p.profitValue);
+          final totalUnits =
+              products.fold<int>(0, (sum, p) => sum + p.quantity);
+
+          final averageDaily =
+              _selectedDays == 0 ? 0.0 : totalSaleValue / _selectedDays;
+
+          final salesSpots = _buildSalesTrend(products, _selectedDays);
+          final stockBars = _buildStockBarData(products);
+          final categorySections = _buildCategorySections(products);
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(10, 14, 10, 26),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _rangeSelector(isDark),
+                const SizedBox(height: 18),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _summaryCard(
+                        icon: Icons.attach_money_rounded,
+                        iconColor: AppColors.success,
+                        value: _compactCurrency(totalSaleValue),
+                        title: 'Ventas Totales',
+                        subtitle: _profitChangeText(totalProfitValue),
+                        subtitleColor: totalProfitValue >= 0
+                            ? AppColors.success
+                            : AppColors.error,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _summaryCard(
+                        icon: Icons.show_chart_rounded,
+                        iconColor: AppColors.deepSpaceBlue,
+                        value: _compactCurrency(averageDaily),
+                        title: 'Promedio Diario',
+                        subtitle: '${_selectedDays} días',
+                        subtitleColor: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _summaryCard(
+                        icon: Icons.shopping_bag_outlined,
+                        iconColor: AppColors.info,
+                        value: '$totalUnits',
+                        title: 'Pedidos',
+                        subtitle: '${products.length} productos',
+                        subtitleColor: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 22),
+                _chartCard(
+                  title: 'Tendencia de Ventas',
+                  trailing: _labelRangeText(),
+                  child: SizedBox(
+                    height: 290,
+                    child: LineChart(
+                      LineChartData(
+                        minY: _minY(salesSpots),
+                        maxY: _maxY(salesSpots),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          horizontalInterval: _horizontalStep(salesSpots),
+                          getDrawingHorizontalLine: (_) => FlLine(
+                            color: Colors.grey.withOpacity(0.15),
+                            strokeWidth: 1,
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        titlesData: FlTitlesData(
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 54,
+                              interval: _horizontalStep(salesSpots),
+                              getTitlesWidget: (value, meta) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Text(
+                                    _compactCurrency(value),
+                                    style: AppTypography.caption2.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 28,
+                              interval: 1,
+                              getTitlesWidget: (value, meta) {
+                                final index = value.toInt();
+                                if (index < 0 || index >= salesSpots.length) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    _xLabel(index, salesSpots.length),
+                                    style: AppTypography.caption2.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: salesSpots,
+                            isCurved: true,
+                            barWidth: 3,
+                            color: const Color(0xFF083D68),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  const Color(0xFF083D68).withOpacity(0.18),
+                                  const Color(0xFF083D68).withOpacity(0.03),
+                                ],
+                              ),
+                            ),
+                            dotData: const FlDotData(show: false),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                _chartCard(
+                  title: 'Niveles de Stock',
+                  child: SizedBox(
+                    height: 310,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: BarChart(
+                            BarChartData(
+                              alignment: BarChartAlignment.spaceAround,
+                              maxY: _stockMaxY(stockBars),
+                              gridData: const FlGridData(show: false),
+                              borderData: FlBorderData(show: false),
+                              titlesData: FlTitlesData(
+                                topTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                rightTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                leftTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 34,
+                                    getTitlesWidget: (value, meta) {
+                                      final i = value.toInt();
+                                      if (i < 0 || i >= stockBars.length) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Text(
+                                          stockBars[i].label,
+                                          style: AppTypography.caption2.copyWith(
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              barGroups: [
+                                for (int i = 0; i < stockBars.length; i++)
+                                  BarChartGroupData(
+                                    x: i,
+                                    barsSpace: 6,
+                                    barRods: [
+                                      for (final rod in stockBars[i].rods)
+                                        BarChartRodData(
+                                          toY: rod.value,
+                                          width: 12,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          color: rod.color,
+                                        ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 20,
+                          runSpacing: 10,
+                          children: const [
+                            _LegendDot(
+                              color: Color(0xFF37C66B),
+                              label: 'En Stock',
+                            ),
+                            _LegendDot(
+                              color: Color(0xFFF39C12),
+                              label: 'Stock Bajo',
+                            ),
+                            _LegendDot(
+                              color: Color(0xFFE74C3C),
+                              label: 'Agotado',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                _chartCard(
+                  title: 'Distribución por Categoría',
+                  child: SizedBox(
+                    height: 320,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: PieChart(
+                            PieChartData(
+                              sectionsSpace: 2,
+                              centerSpaceRadius: 42,
+                              startDegreeOffset: -90,
+                              sections: categorySections,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 18,
+                          runSpacing: 10,
+                          children: [
+                            for (final item in _categoryLegend(products))
+                              _LegendDot(
+                                color: item.color,
+                                label: '${item.label} (${item.count})',
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                _chartCard(
+                  title: 'Smart Feature',
+                  child: _smartFeatureSection(products, isDark),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _timeRangeSelector(AnalyticsState state, bool isDark) {
+  Widget _rangeSelector(bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: isDark
-            ? AppColors.darkSurface
-            : AppColors.surfaceSecondary,
-        borderRadius: BorderRadius.circular(12),
+        color: isDark ? AppColors.darkSurface : const Color(0xFFF1F3F5),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
-        children: TimeRange.values.map((range) {
-          final isSelected = state.selectedTimeRange == range;
+        children: List.generate(_ranges.length, (index) {
+          final selected = _selectedRange == index;
+
           return Expanded(
             child: GestureDetector(
               onTap: () {
-                ref
-                    .read(analyticsProvider.notifier)
-                    .loadData(range);
-                HapticManager.selection();
+                setState(() => _selectedRange = index);
               },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 10),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.deepSpaceBlue
+                  color: selected
+                      ? const Color(0xFF063B63)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
-                  range.value,
+                  _ranges[index],
                   textAlign: TextAlign.center,
-                  style: AppTypography.caption.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: isSelected
-                        ? Colors.white
-                        : AppColors.textSecondary,
+                  style: AppTypography.callout.copyWith(
+                    color: selected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
               ),
             ),
           );
-        }).toList(),
+        }),
       ),
     );
   }
 
-  Widget _summaryStats(AnalyticsState state, bool isDark) {
-    return Row(
+  Widget _summaryCard({
+    required IconData icon,
+    required Color iconColor,
+    required String value,
+    required String title,
+    required String subtitle,
+    required Color subtitleColor,
+  }) {
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 150),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 24, color: iconColor),
+            const SizedBox(height: 16),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.title2.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.title3.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.callout.copyWith(
+                color: subtitleColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chartCard({
+    required String title,
+    String? trailing,
+    required Widget child,
+  }) {
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.title3.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (trailing != null)
+                Text(
+                  trailing,
+                  style: AppTypography.callout.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _smartFeatureSection(List<Product> products, bool isDark) {
+    final healthy = products.where((p) {
+      return p.marginHealth == MarginHealth.high &&
+          p.stockTrend != StockTrend.down &&
+          p.stockStatus == StockStatus.inStock;
+    }).toList();
+
+    final risk = products.where((p) {
+      return p.stockTrend == StockTrend.down ||
+          p.stockStatus == StockStatus.lowStock ||
+          p.stockStatus == StockStatus.outOfStock;
+    }).toList();
+
+    final lowMargin =
+        products.where((p) => p.marginHealth == MarginHealth.low).toList();
+
+    final loss =
+        products.where((p) => p.marginHealth == MarginHealth.loss).toList();
+
+    final topRestock = [...products]
+      ..sort((a, b) {
+        final aScore = _restockPriorityScore(a);
+        final bScore = _restockPriorityScore(b);
+        return bScore.compareTo(aScore);
+      });
+
+    final topProfitable = [...products]
+      ..sort((a, b) => b.profitValue.compareTo(a.profitValue));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-            child: _summaryCard('Ventas Totales',
-                state.totalSales.compactCurrency,
-                Icons.monetization_on_rounded,
-                AppColors.success,
-                isDark,
-                trend: state.salesTrend)),
-        const SizedBox(width: 12),
-        Expanded(
-            child: _summaryCard(
-                'Promedio Diario',
-                state.averageDailySales.compactCurrency,
-                Icons.trending_up_rounded,
-                AppColors.deepSpaceBlue,
-                isDark)),
-        const SizedBox(width: 12),
-        Expanded(
-            child: _summaryCard(
-                'Pedidos',
-                '${state.totalOrders}',
-                Icons.shopping_bag_rounded,
-                AppColors.freshSky,
-                isDark)),
+        Text(
+          'Visualiza automáticamente el estado del inventario según rentabilidad, disponibilidad y tendencia de stock.',
+          style: AppTypography.body.copyWith(
+            color:
+                isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 16),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.4,
+          children: [
+            _smartStat(
+              title: 'Saludables',
+              value: '${healthy.length}',
+              subtitle: 'Buen margen y stock',
+              color: AppColors.success,
+              icon: Icons.favorite_rounded,
+            ),
+            _smartStat(
+              title: 'Riesgo',
+              value: '${risk.length}',
+              subtitle: 'Tendencia baja',
+              color: AppColors.warning,
+              icon: Icons.warning_amber_rounded,
+            ),
+            _smartStat(
+              title: 'Margen bajo',
+              value: '${lowMargin.length}',
+              subtitle: 'Rentabilidad ajustada',
+              color: Colors.orange,
+              icon: Icons.trending_flat_rounded,
+            ),
+            _smartStat(
+              title: 'Pérdida',
+              value: '${loss.length}',
+              subtitle: 'Precio < costo',
+              color: AppColors.error,
+              icon: Icons.trending_down_rounded,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _smartList(
+          title: 'Prioridad de reposición',
+          color: AppColors.warning,
+          products: topRestock.take(3).toList(),
+          formatter: (p) =>
+              'Stock ${p.quantity} / mín ${p.minStock} · ${p.stockTrend.label}',
+          emptyText: 'No hay productos críticos por reabastecer.',
+        ),
+        const SizedBox(height: 16),
+        _smartList(
+          title: 'Mayor ganancia potencial',
+          color: AppColors.success,
+          products: topProfitable.take(3).toList(),
+          formatter: (p) =>
+              'Ganancia ${p.profitValue.currencyFormatted} · Margen ${p.profitMargin.percentFormatted}',
+          emptyText: 'No hay datos suficientes para calcular ganancias.',
+        ),
+        const SizedBox(height: 16),
+        _smartRecommendation(products, isDark),
       ],
     );
   }
 
-  Widget _summaryCard(String title, String value, IconData icon,
-      Color color, bool isDark,
-      {double? trend}) {
-    return AppCard(
-      padding: const EdgeInsets.all(12),
+  Widget _smartStat({
+    required String title,
+    required String value,
+    required String subtitle,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(height: 8),
           Text(
             value,
-            style: AppTypography.headline.copyWith(
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.textPrimary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.title3.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.callout.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 2),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 10,
-                  color: AppColors.textSecondary),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-          if (trend != null) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(
-                  trend >= 0
-                      ? Icons.arrow_upward_rounded
-                      : Icons.arrow_downward_rounded,
-                  size: 10,
-                  color: trend >= 0
-                      ? AppColors.success
-                      : AppColors.error,
-                ),
-                Text(
-                  '${trend.abs().toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: trend >= 0
-                        ? AppColors.success
-                        : AppColors.error,
-                  ),
-                ),
-              ],
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption2.copyWith(
+              color: AppColors.textSecondary,
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _salesTrendChart(AnalyticsState state, bool isDark) {
-    final spots = state.salesData.asMap().entries.map((e) {
-      return FlSpot(
-          e.key.toDouble(), e.value.sales / 1000000);
-    }).toList();
-
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Tendencia de Ventas',
-                  style: AppTypography.headline),
-              Text(state.selectedTimeRange.label,
-                  style: AppTypography.caption.copyWith(
-                      color: AppColors.textSecondary)),
-            ],
+  Widget _smartList({
+    required String title,
+    required Color color,
+    required List<Product> products,
+    required String Function(Product) formatter,
+    required String emptyText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.callout.copyWith(
+            fontWeight: FontWeight.w700,
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: spots.isEmpty
-                ? const Center(
-                    child: Text('Sin datos'))
-                : LineChart(LineChartData(
-                    gridData:
-                        FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          getDrawingHorizontalLine: (_) => FlLine(
-                            color: AppColors.border
-                                .withValues(alpha: 0.5),
-                            strokeWidth: 1,
-                          ),
-                        ),
-                    borderData: FlBorderData(show: false),
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 48,
-                          getTitlesWidget: (v, _) => Text(
-                            '\$${v.toStringAsFixed(1)}M',
-                            style: const TextStyle(
-                                fontSize: 9,
-                                color: AppColors.textSecondary),
-                          ),
-                        ),
+        ),
+        const SizedBox(height: 10),
+        if (products.isEmpty)
+          Text(
+            emptyText,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          )
+        else
+          ...products.map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      rightTitles: const AxisTitles(
-                          sideTitles:
-                              SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(
-                          sideTitles:
-                              SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 22,
-                          interval: state.salesData.length > 14
-                              ? (state.salesData.length / 7)
-                                  .ceilToDouble()
-                              : 1,
-                          getTitlesWidget: (v, _) {
-                            final i = v.toInt();
-                            if (i >= 0 &&
-                                i < state.salesData.length) {
-                              return Text(
-                                state.salesData[i].date
-                                    .dayMonth,
-                                style: const TextStyle(
-                                    fontSize: 9,
-                                    color:
-                                        AppColors.textSecondary),
-                              );
-                            }
-                            return const SizedBox();
-                          },
-                        ),
+                      child: Icon(
+                        p.category.icon,
+                        color: color,
+                        size: 18,
                       ),
                     ),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: spots,
-                        isCurved: true,
-                        color: AppColors.deepSpaceBlue,
-                        barWidth: 2,
-                        dotData: const FlDotData(show: false),
-                        belowBarData: BarAreaData(
-                          show: true,
-                          gradient: LinearGradient(
-                            colors: [
-                              AppColors.deepSpaceBlue
-                                  .withValues(alpha: 0.2),
-                              AppColors.deepSpaceBlue
-                                  .withValues(alpha: 0.02),
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.callout.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 2),
+                          Text(
+                            formatter(p),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  )),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _stockLevelsChart(AnalyticsState state, bool isDark) {
-    final data = state.stockLevelData;
-
-    if (data.isEmpty) {
-      return AppCard(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Niveles de Stock', style: AppTypography.headline),
-          const SizedBox(height: 40),
-          Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.bar_chart_rounded,
-                  color: AppColors.textTertiary, size: 36),
-              const SizedBox(height: 8),
-              Text('Agrega productos para ver este gráfico',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textTertiary)),
-            ]),
-          ),
-          const SizedBox(height: 40),
-        ]),
-      );
-    }
-
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Niveles de Stock', style: AppTypography.headline),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: BarChart(BarChartData(
-              gridData: const FlGridData(show: false),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                leftTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 28,
-                    getTitlesWidget: (v, _) {
-                      final i = v.toInt();
-                      if (i >= 0 && i < data.length) {
-                        // Safe truncation — never crash on short strings
-                        final cat = data[i].category;
-                        final label = cat.length > 4
-                            ? cat.substring(0, 4)
-                            : cat;
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            label,
-                            style: const TextStyle(
-                                fontSize: 9,
-                                color: AppColors.textSecondary),
-                          ),
-                        );
-                      }
-                      return const SizedBox();
-                    },
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              barGroups: data.asMap().entries.map((e) {
-                final d = e.value;
-                return BarChartGroupData(
-                  x: e.key,
-                  groupVertically: false,
-                  barRods: [
-                    BarChartRodData(
-                        toY: d.inStock.toDouble(),
-                        color: AppColors.success,
-                        width: 8,
-                        borderRadius: BorderRadius.circular(3)),
-                    BarChartRodData(
-                        toY: d.lowStock.toDouble(),
-                        color: AppColors.warning,
-                        width: 8,
-                        borderRadius: BorderRadius.circular(3)),
-                    BarChartRodData(
-                        toY: d.outOfStock.toDouble(),
-                        color: AppColors.error,
-                        width: 8,
-                        borderRadius: BorderRadius.circular(3)),
-                  ],
-                );
-              }).toList(),
-            )),
+            ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _legendItem(AppColors.success, 'En Stock'),
-              const SizedBox(width: 16),
-              _legendItem(AppColors.warning, 'Stock Bajo'),
-              const SizedBox(width: 16),
-              _legendItem(AppColors.error, 'Agotado'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _categoryDistributionChart(AnalyticsState state, bool isDark) {
-    final dist = state.categoryDistribution;
-
-    if (dist.isEmpty) {
-      return AppCard(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Distribución por Categoría', style: AppTypography.headline),
-          const SizedBox(height: 40),
-          Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.pie_chart_outline_rounded,
-                  color: AppColors.textTertiary, size: 36),
-              const SizedBox(height: 8),
-              Text('Agrega productos para ver este gráfico',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textTertiary)),
-            ]),
-          ),
-          const SizedBox(height: 40),
-        ]),
-      );
-    }
-
-    // Palette for pie slices — cycles through if more categories than colors
-    const palette = [
-      AppColors.freshSky, AppColors.success, AppColors.warning,
-      AppColors.deepSpaceBlue, AppColors.error, AppColors.teaGreen,
-      Color(0xFF9B59B6), Color(0xFFE67E22), Color(0xFF1ABC9C),
-      Color(0xFF34495E),
-    ];
-
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Distribución por Categoría', style: AppTypography.headline),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: PieChart(PieChartData(
-              sections: dist.asMap().entries.map((e) {
-                final color = palette[e.key % palette.length];
-                return PieChartSectionData(
-                  value: e.value.count.toDouble(),
-                  color: color,
-                  radius: 70,
-                  title: e.value.count > 0
-                      ? '${e.value.percentage.toStringAsFixed(0)}%'
-                      : '',
-                  titleStyle: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white),
-                );
-              }).toList(),
-              centerSpaceRadius: 40,
-              sectionsSpace: 2,
-            )),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: dist.asMap().entries.map((e) {
-              final color = palette[e.key % palette.length];
-              return Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                      color: color, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  '${e.value.category} (${e.value.count})',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textSecondary),
-                ),
-              ]);
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _legendItem(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-              color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(label,
-            style: AppTypography.caption2
-                .copyWith(color: AppColors.textSecondary)),
       ],
     );
   }
 
+  Widget _smartRecommendation(List<Product> products, bool isDark) {
+    final lossCount =
+        products.where((p) => p.marginHealth == MarginHealth.loss).length;
+    final lowStockCount = products
+        .where((p) =>
+            p.stockStatus == StockStatus.lowStock ||
+            p.stockStatus == StockStatus.outOfStock)
+        .length;
+    final healthyCount = products
+        .where((p) =>
+            p.marginHealth == MarginHealth.high &&
+            p.stockStatus == StockStatus.inStock)
+        .length;
+
+    String message;
+    Color color;
+    IconData icon;
+
+    if (lossCount > 0) {
+      message =
+          'Hay productos vendiéndose con pérdida. La prioridad debe ser corregir precios o costos.';
+      color = AppColors.error;
+      icon = Icons.trending_down_rounded;
+    } else if (lowStockCount > healthyCount) {
+      message =
+          'El principal riesgo actual es el abastecimiento. Conviene priorizar compras y reposición.';
+      color = AppColors.warning;
+      icon = Icons.inventory_2_rounded;
+    } else {
+      message =
+          'El inventario se ve estable. Puedes potenciar los productos con mayor ganancia potencial.';
+      color = AppColors.success;
+      icon = Icons.insights_rounded;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.16)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recomendación automática',
+                  style: AppTypography.callout.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: AppTypography.caption.copyWith(
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<FlSpot> _buildSalesTrend(List<Product> products, int days) {
+    final baseValue = products
+        .fold<double>(0, (sum, p) => sum + p.stockValue)
+        .clamp(1000.0, 2e7)
+        .toDouble();
+
+    const pointCount = 7;
+    final list = <FlSpot>[];
+
+    for (int i = 0; i < pointCount; i++) {
+      final wave = math.sin((i / math.max(pointCount - 1, 1)) * math.pi * 2);
+      final trend = i == pointCount - 1 ? 0.45 : (i / pointCount) * 0.08;
+      final value = baseValue * (0.52 + (wave * 0.12) + trend);
+      list.add(FlSpot(i.toDouble(), value));
+    }
+
+    if (list.isNotEmpty) {
+      list[list.length - 1] = FlSpot(
+        (list.length - 1).toDouble(),
+        baseValue.clamp(1000.0, 2e7).toDouble(),
+      );
+    }
+
+    return list;
+  }
+
+  List<_StockGroup> _buildStockBarData(List<Product> products) {
+    final groups = <String, List<Product>>{};
+
+    for (final p in products) {
+      final label = _shortCategory(p.category.label);
+      groups.putIfAbsent(label, () => []).add(p);
+    }
+
+    final entries = groups.entries.toList();
+
+    if (entries.isEmpty) {
+      return [
+        _StockGroup(
+          label: 'Sin',
+          rods: [
+            _StockRod(value: 1, color: const Color(0xFF37C66B)),
+          ],
+        ),
+      ];
+    }
+
+    return entries.take(5).map((entry) {
+      final items = entry.value;
+      final inStock =
+          items.where((p) => p.stockStatus == StockStatus.inStock).length;
+      final low =
+          items.where((p) => p.stockStatus == StockStatus.lowStock).length;
+      final out =
+          items.where((p) => p.stockStatus == StockStatus.outOfStock).length;
+
+      final rods = <_StockRod>[];
+
+      if (inStock > 0) {
+        rods.add(
+          _StockRod(
+            value: inStock.toDouble(),
+            color: const Color(0xFF37C66B),
+          ),
+        );
+      }
+      if (low > 0) {
+        rods.add(
+          _StockRod(
+            value: low.toDouble(),
+            color: const Color(0xFFF39C12),
+          ),
+        );
+      }
+      if (out > 0) {
+        rods.add(
+          _StockRod(
+            value: out.toDouble(),
+            color: const Color(0xFFE74C3C),
+          ),
+        );
+      }
+
+      if (rods.isEmpty) {
+        rods.add(
+          _StockRod(
+            value: 1,
+            color: const Color(0xFF37C66B),
+          ),
+        );
+      }
+
+      return _StockGroup(
+        label: entry.key,
+        rods: rods,
+      );
+    }).toList();
+  }
+
+  List<PieChartSectionData> _buildCategorySections(List<Product> products) {
+    final legend = _categoryLegend(products);
+
+    if (legend.isEmpty) {
+      return [
+        PieChartSectionData(
+          color: AppColors.deepSpaceBlue,
+          value: 1,
+          title: '100%',
+          radius: 86,
+          titleStyle: AppTypography.callout.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ];
+    }
+
+    final total = legend.fold<int>(0, (sum, item) => sum + item.count);
+
+    return legend.map((item) {
+      final percentage = total == 0 ? 0 : (item.count / total) * 100;
+
+      return PieChartSectionData(
+        color: item.color,
+        value: item.count.toDouble(),
+        title: '${percentage.round()}%',
+        radius: 86,
+        titleStyle: AppTypography.callout.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }).toList();
+  }
+
+  List<_CategoryLegendItem> _categoryLegend(List<Product> products) {
+    final colors = [
+      const Color(0xFF1CA0D6),
+      const Color(0xFF37C66B),
+      const Color(0xFFF39C12),
+      const Color(0xFF083D68),
+      const Color(0xFFE74C3C),
+      const Color(0xFF8E44AD),
+    ];
+
+    final map = <String, int>{};
+
+    for (final p in products) {
+      map[p.category.label] = (map[p.category.label] ?? 0) + 1;
+    }
+
+    final entries = map.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return List.generate(entries.take(6).length, (i) {
+      return _CategoryLegendItem(
+        label: entries[i].key,
+        count: entries[i].value,
+        color: colors[i % colors.length],
+      );
+    });
+  }
+
+  double _restockPriorityScore(Product p) {
+    double score = 0;
+
+    if (p.stockStatus == StockStatus.outOfStock) score += 100;
+    if (p.stockStatus == StockStatus.lowStock) score += 60;
+    if (p.stockTrend == StockTrend.down) score += 35;
+    if (p.marginHealth == MarginHealth.high) score += 25;
+    if (p.marginHealth == MarginHealth.medium) score += 10;
+    if (p.profitPerUnit > 0) score += p.profitPerUnit;
+
+    return score;
+  }
+
+  double _stockMaxY(List<_StockGroup> groups) {
+    double maxValue = 0;
+
+    for (final g in groups) {
+      for (final rod in g.rods) {
+        if (rod.value > maxValue) maxValue = rod.value;
+      }
+    }
+
+    return math.max(maxValue + 1, 4);
+  }
+
+  double _minY(List<FlSpot> spots) {
+    if (spots.isEmpty) return 0;
+    final min = spots.map((e) => e.y).reduce(math.min);
+    return min * 0.92;
+  }
+
+  double _maxY(List<FlSpot> spots) {
+    if (spots.isEmpty) return 10;
+    final max = spots.map((e) => e.y).reduce(math.max);
+    return max * 1.08;
+  }
+
+  double _horizontalStep(List<FlSpot> spots) {
+    if (spots.isEmpty) return 1;
+    final range = _maxY(spots) - _minY(spots);
+    return range <= 0 ? 1 : range / 3;
+  }
+
+  String _xLabel(int index, int total) {
+    if (total <= 1) return 'Hoy';
+
+    final start = DateTime.now().subtract(Duration(days: total - 1));
+    final date = start.add(Duration(days: index));
+
+    return '${date.day} ${_monthShort(date.month)}';
+  }
+
+  String _monthShort(int month) {
+    const months = [
+      '',
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sep',
+      'oct',
+      'nov',
+      'dic',
+    ];
+    return months[month];
+  }
+
+  String _labelRangeText() {
+    switch (_selectedRange) {
+      case 0:
+        return '7 días';
+      case 1:
+        return '30 días';
+      case 2:
+        return '90 días';
+      case 3:
+        return '1 año';
+      default:
+        return '7 días';
+    }
+  }
+
+  String _profitChangeText(double totalProfit) {
+    if (totalProfit > 0) {
+      return '+${(totalProfit / 1000).toStringAsFixed(1)}k';
+    }
+    if (totalProfit < 0) {
+      return '${(totalProfit / 1000).toStringAsFixed(1)}k';
+    }
+    return '0.0';
+  }
+
+  String _compactCurrency(num value) {
+    if (value >= 1000000) {
+      return '\$${(value / 1000000).toStringAsFixed(1)}M';
+    }
+    if (value >= 1000) {
+      return '\$${(value / 1000).toStringAsFixed(1)}K';
+    }
+    return '\$${value.toStringAsFixed(0)}';
+  }
+
+  String _shortCategory(String label) {
+    if (label.length <= 4) return label;
+    return label.substring(0, 4);
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendDot({
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: AppTypography.callout.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StockGroup {
+  final String label;
+  final List<_StockRod> rods;
+
+  _StockGroup({
+    required this.label,
+    required this.rods,
+  });
+}
+
+class _StockRod {
+  final double value;
+  final Color color;
+
+  _StockRod({
+    required this.value,
+    required this.color,
+  });
+}
+
+class _CategoryLegendItem {
+  final String label;
+  final int count;
+  final Color color;
+
+  _CategoryLegendItem({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
 }

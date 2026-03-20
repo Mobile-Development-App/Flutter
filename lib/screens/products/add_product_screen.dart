@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../services/api_service.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
@@ -753,9 +754,11 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       imageURL: _imageUrl,
       lastUpdated: DateTime.now(),
       isActive: true,
-      storeId: widget.editingProduct?.storeId,
-      categoryId: widget.editingProduct?.categoryId,
-      supplierId: widget.editingProduct?.supplierId,
+      // Fallbacks: nuevos productos creados desde UI suelen venir sin IDs.
+      // El backend normalmente puede asociar usando estos strings.
+      storeId: widget.editingProduct?.storeId ?? ApiService.shared.storeId,
+      categoryId: widget.editingProduct?.categoryId ?? _category.label,
+      supplierId: widget.editingProduct?.supplierId ?? _supplierCtrl.text.trim(),
     );
 
     if (_isEditing) {

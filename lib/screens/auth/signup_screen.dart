@@ -88,7 +88,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       maxChildSize: 0.95,
       builder: (_, scrollController) => Container(
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkBackground : AppColors.surface,
+          color: isDark ? AppColors.darkNavBackground : AppColors.surface,
           borderRadius:
               const BorderRadius.vertical(top: Radius.circular(20)),
         ),

@@ -60,7 +60,7 @@ class _NotificationsScreenState
           isDark ? AppColors.darkBackground : AppColors.background,
       appBar: AppBar(
         backgroundColor:
-            isDark ? AppColors.darkBackground : AppColors.deepSpaceBlue,
+            isDark ? AppColors.darkNavBackground : AppColors.inkBlack,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,

@@ -20,32 +20,44 @@ class AppSearchBar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: isDark
-            ? AppColors.darkSurfaceSecondary
-            : AppColors.surfaceSecondary,
+        color: isDark ? AppColors.darkSurface : AppColors.surface,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.border,
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded,
-              color: AppColors.textTertiary, size: 20),
+          Icon(
+            Icons.search_rounded,
+            color: isDark ? AppColors.darkTextTertiary : AppColors.textTertiary,
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
               onChanged: onChanged,
-              style: AppTypography.body,
+              style: AppTypography.callout.copyWith(
+                color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+              ),
               decoration: InputDecoration(
                 hintText: placeholder,
-                hintStyle: AppTypography.body
-                    .copyWith(color: AppColors.textTertiary),
+                hintStyle: AppTypography.callout.copyWith(
+                  color: isDark
+                      ? AppColors.darkTextTertiary
+                      : AppColors.textTertiary,
+                ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
+                filled: false,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                contentPadding: EdgeInsets.zero,
               ),
               autocorrect: false,
             ),
@@ -57,8 +69,21 @@ class AppSearchBar extends StatelessWidget {
                 onChanged?.call('');
                 HapticManager.impact();
               },
-              child: const Icon(Icons.cancel_rounded,
-                  color: AppColors.textTertiary, size: 18),
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkTextTertiary
+                      : AppColors.textTertiary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  size: 12,
+                  color: Colors.white,
+                ),
+              ),
             ),
         ],
       ),

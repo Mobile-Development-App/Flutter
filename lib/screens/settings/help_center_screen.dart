@@ -205,7 +205,7 @@ class LanguageSettingsScreen extends ConsumerWidget {
                       width: 1.5,
                     ),
                     boxShadow: isDark
-                        ? AppShadows.darkMedium
+                        ? AppShadows.darkCard
                         : AppShadows.medium,
                   ),
                   child: Row(

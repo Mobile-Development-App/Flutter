@@ -172,7 +172,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               isDark ? AppColors.darkSurface : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           boxShadow: isDark
-              ? AppShadows.darkMedium
+              ? AppShadows.darkCard
               : AppShadows.medium,
         ),
         child: Row(
@@ -236,7 +236,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             isDark ? AppColors.darkSurface : AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow:
-            isDark ? AppShadows.darkMedium : AppShadows.medium,
+            isDark ? AppShadows.darkCard : AppShadows.medium,
       ),
       child: Column(children: children),
     );
@@ -270,8 +270,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: AppColors.deepSpaceBlue,
-            activeTrackColor: AppColors.deepSpaceBlue.withValues(alpha: 0.4),
+            activeColor: AppColors.teaGreen,
           ),
         ],
       ),

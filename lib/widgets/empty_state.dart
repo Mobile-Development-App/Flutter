@@ -25,32 +25,52 @@ class EmptyState extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 64, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
+            // Icon with glow
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: (isDark
+                        ? AppColors.freshSky
+                        : AppColors.deepSpaceBlue)
+                    .withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 36,
+                color: isDark
+                    ? AppColors.darkTextTertiary
+                    : AppColors.textTertiary,
+              ),
+            ),
+            const SizedBox(height: 20),
             Text(
               title,
               style: AppTypography.title3.copyWith(
-                color:
-                    isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.textPrimary,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               description,
-              style: AppTypography.body.copyWith(
+              style: AppTypography.callout.copyWith(
                 color: isDark
                     ? AppColors.darkTextSecondary
                     : AppColors.textSecondary,
+                height: 1.6,
               ),
               textAlign: TextAlign.center,
             ),
             if (actionTitle != null && onAction != null) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
               SizedBox(
                 width: 200,
                 child: ElevatedButton(

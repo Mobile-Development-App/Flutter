@@ -10,12 +10,13 @@ class _OnboardingPage {
   final IconData icon;
   final String title;
   final String description;
-  final Color color;
-  const _OnboardingPage(
-      {required this.icon,
-      required this.title,
-      required this.description,
-      required this.color});
+  final Color accentColor;
+  const _OnboardingPage({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.accentColor,
+  });
 }
 
 const _pages = [
@@ -23,22 +24,22 @@ const _pages = [
     icon: Icons.camera_enhance_rounded,
     title: 'Escaneo con IA',
     description:
-        'Escanea tus productos con la cámara y nuestra IA los reconocerá automáticamente, ahorrándote tiempo en el registro de inventario.',
-    color: AppColors.deepSpaceBlue,
+        'Escanea tus productos con la cámara y nuestra IA los reconocerá automáticamente, ahorrándote tiempo en el registro.',
+    accentColor: AppColors.teaGreen,
   ),
   _OnboardingPage(
     icon: Icons.notifications_active_rounded,
     title: 'Alertas Inteligentes',
     description:
         'Recibe notificaciones cuando tus productos estén por agotarse, próximos a vencer o cuando sea momento de reabastecer.',
-    color: AppColors.warning,
+    accentColor: AppColors.warning,
   ),
   _OnboardingPage(
     icon: Icons.bar_chart_rounded,
     title: 'Analítica en Tiempo Real',
     description:
-        'Visualiza el rendimiento de tu inventario con gráficos y estadísticas que te ayudan a tomar mejores decisiones de negocio.',
-    color: AppColors.teaGreen,
+        'Visualiza el rendimiento de tu inventario con gráficas que te ayudan a tomar mejores decisiones de negocio.',
+    accentColor: AppColors.freshSky,
   ),
 ];
 
@@ -46,28 +47,38 @@ class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  ConsumerState<OnboardingScreen> createState() =>
-      _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
+    with SingleTickerProviderStateMixin {
   final _pageController = PageController();
+  late AnimationController _animCtrl;
   int _current = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    )..forward();
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _animCtrl.dispose();
     super.dispose();
   }
 
-  void _complete() =>
-      ref.read(authProvider.notifier).completeOnboarding();
+  void _complete() => ref.read(authProvider.notifier).completeOnboarding();
 
   void _next() {
     HapticManager.impact();
     if (_current < _pages.length - 1) {
       _pageController.nextPage(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 350),
           curve: Curves.easeInOut);
     } else {
       _complete();
@@ -77,28 +88,55 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void _back() {
     HapticManager.impact();
     _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Always use brand dark aesthetic for onboarding
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: AppColors.darkBackground,
       body: SafeArea(
         child: Column(
           children: [
-            // Skip
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _complete,
-                child: Text('Omitir',
-                    style: AppTypography.callout
-                        .copyWith(color: AppColors.textSecondary)),
+            // ── Top bar ──────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Step counter
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkSurface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: const Color(0x1AFFFFFF), width: 0.5),
+                    ),
+                    child: Text(
+                      '${_current + 1} / ${_pages.length}',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.darkTextSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _complete,
+                    child: Text(
+                      'Omitir',
+                      style: AppTypography.callout.copyWith(
+                          color: AppColors.darkTextSecondary),
+                    ),
+                  ),
+                ],
               ),
             ),
-            // Pages
+
+            // ── Pages ─────────────────────────────────────────────────────
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -107,28 +145,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 itemBuilder: (_, i) => _pageView(_pages[i]),
               ),
             ),
-            // Dots
+
+            // ── Progress dots ─────────────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
                 _pages.length,
                 (i) => AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: i == _current ? 24 : 8,
+                  width: i == _current ? 28 : 8,
                   height: 8,
                   decoration: BoxDecoration(
                     color: i == _current
-                        ? AppColors.deepSpaceBlue
-                        : AppColors.textTertiary
-                            .withValues(alpha: 0.3),
+                        ? _pages[_current].accentColor
+                        : AppColors.darkBorder,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-            // Buttons
+
+            const SizedBox(height: 36),
+
+            // ── Navigation buttons ────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -147,9 +188,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     child: ElevatedButton(
                       onPressed: _next,
                       style: primaryButtonStyle,
-                      child: Text(_current < _pages.length - 1
-                          ? 'Siguiente'
-                          : 'Comenzar'),
+                      child: Text(
+                        _current < _pages.length - 1 ? 'Siguiente' : 'Comenzar',
+                      ),
                     ),
                   ),
                 ],
@@ -168,37 +209,59 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Icon with layered glow effect
           Stack(
             alignment: Alignment.center,
             children: [
               Container(
-                width: 160,
-                height: 160,
+                width: 180,
+                height: 180,
                 decoration: BoxDecoration(
-                  color: page.color.withValues(alpha: 0.1),
+                  color: page.accentColor.withValues(alpha: 0.05),
                   shape: BoxShape.circle,
                 ),
               ),
               Container(
-                width: 120,
-                height: 120,
+                width: 140,
+                height: 140,
                 decoration: BoxDecoration(
-                  color: page.color.withValues(alpha: 0.2),
+                  color: page.accentColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
               ),
-              Icon(page.icon, size: 56, color: page.color),
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: page.accentColor.withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: page.accentColor.withValues(alpha: 0.3),
+                      blurRadius: 24,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(page.icon, size: 52, color: page.accentColor),
             ],
           ),
-          const SizedBox(height: 40),
-          Text(page.title,
-              style: AppTypography.title,
-              textAlign: TextAlign.center),
+          const SizedBox(height: 44),
+          Text(
+            page.title,
+            style: AppTypography.title.copyWith(
+              color: AppColors.darkTextPrimary,
+            ),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 16),
           Text(
             page.description,
-            style: AppTypography.body
-                .copyWith(color: AppColors.textSecondary),
+            style: AppTypography.body.copyWith(
+              color: AppColors.darkTextSecondary,
+              height: 1.6,
+            ),
             textAlign: TextAlign.center,
           ),
         ],

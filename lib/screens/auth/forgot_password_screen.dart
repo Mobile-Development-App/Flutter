@@ -36,7 +36,7 @@ class _ForgotPasswordScreenState
       maxChildSize: 0.9,
       builder: (_, scrollController) => Container(
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkBackground : AppColors.surface,
+          color: isDark ? AppColors.darkNavBackground : AppColors.surface,
           borderRadius:
               const BorderRadius.vertical(top: Radius.circular(20)),
         ),

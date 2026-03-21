@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_typography.dart';
+import '../core/theme/app_theme.dart';
 import '../models/alert.dart';
 
 class AlertCard extends StatelessWidget {
@@ -12,90 +13,133 @@ class AlertCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = alert.type.color;
-    final unreadBg = isDark
-        ? AppColors.darkSurfaceSecondary
-        : AppColors.deepSpaceBlue.withValues(alpha: 0.03);
-    final readBg =
-        isDark ? AppColors.darkSurface : AppColors.surface;
+    final color  = alert.type.color;
+
+    // Unread: subtle tinted background + left accent border
+    final bg = alert.isRead
+        ? (isDark ? AppColors.darkSurface : AppColors.surface)
+        : (isDark
+            ? Color.lerp(AppColors.darkSurface, color, 0.06)!
+            : Color.lerp(AppColors.surface, color, 0.04)!);
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: alert.isRead ? readBg : unreadBg,
-          borderRadius: BorderRadius.circular(12),
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: alert.isRead
-                ? Colors.transparent
-                : AppColors.deepSpaceBlue.withValues(alpha: 0.1),
+                ? (isDark ? AppColors.darkBorder : AppColors.border)
+                : color.withValues(alpha: 0.3),
+            width: alert.isRead ? 0.5 : 1,
           ),
+          boxShadow: alert.isRead
+              ? (isDark ? AppShadows.darkCard : AppShadows.small)
+              : (isDark ? AppShadows.darkCard : AppShadows.medium),
         ),
-        child: Row(
-          children: [
-            // Icon
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(alert.type.icon, color: color, size: 18),
-            ),
-            const SizedBox(width: 12),
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              // ── Left accent stripe on unread ─────────────────────────
+              if (!alert.isRead)
+                Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(14)),
+                  ),
+                ),
+              // ── Content ───────────────────────────────────────────────
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        alert.title,
-                        style: AppTypography.callout.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? AppColors.darkTextPrimary
-                              : AppColors.textPrimary,
+                      // Icon badge
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(alert.type.icon, color: color, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      // Text
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    alert.title,
+                                    style: AppTypography.callout.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? AppColors.darkTextPrimary
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  alert.relativeTime,
+                                  style: AppTypography.caption2.copyWith(
+                                    color: isDark
+                                        ? AppColors.darkTextTertiary
+                                        : AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              alert.message,
+                              style: AppTypography.caption.copyWith(
+                                color: isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.textSecondary,
+                                height: 1.5,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
-                      Text(
-                        alert.relativeTime,
-                        style: AppTypography.caption2.copyWith(
-                          color: AppColors.textTertiary,
+                      // Unread dot
+                      if (!alert.isRead) ...[
+                        const SizedBox(width: 10),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 6),
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.5),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    alert.message,
-                    style: AppTypography.caption.copyWith(
-                      color: isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.textSecondary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            if (!alert.isRead) ...[
-              const SizedBox(width: 8),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.deepSpaceBlue,
-                  shape: BoxShape.circle,
                 ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );

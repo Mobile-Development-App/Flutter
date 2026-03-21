@@ -24,46 +24,42 @@ class StatCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.all(16),
       decoration: cardDecoration(isDark: isDark),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.caption.copyWith(
-                    fontSize: 12,
-                    color: isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.textSecondary,
-                  ),
+          // ── Icon badge + trend row ──────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: AppTypography.title2.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.textPrimary,
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              if (trend != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (trend! >= 0 ? AppColors.success : AppColors.error)
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ),
-                if (trend != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         trend! >= 0
                             ? Icons.arrow_upward_rounded
                             : Icons.arrow_downward_rounded,
-                        size: 12,
+                        size: 10,
                         color: trend! >= 0
                             ? AppColors.success
                             : AppColors.error,
@@ -71,31 +67,42 @@ class StatCard extends StatelessWidget {
                       const SizedBox(width: 2),
                       Text(
                         '${trend!.abs().toStringAsFixed(1)}%',
-                        style: AppTypography.caption2.copyWith(
-                          fontSize: 11,
+                        style: AppTypography.overline.copyWith(
                           color: trend! >= 0
                               ? AppColors.success
                               : AppColors.error,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // ── KPI value ──────────────────────────────────────────────────
+          Text(
+            value,
+            style: AppTypography.title2.copyWith(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+              letterSpacing: -0.5,
             ),
           ),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+          const SizedBox(height: 3),
+
+          // ── Label ──────────────────────────────────────────────────────
+          Text(
+            title,
+            style: AppTypography.caption.copyWith(
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.textSecondary,
             ),
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: 24,
-            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

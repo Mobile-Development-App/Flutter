@@ -34,161 +34,222 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark      = context.isDark;
     final authState   = ref.watch(authProvider).value;
     final isLoggingIn = authState?.isLoggingIn ?? false;
     final loginError  = authState?.loginError;
 
+    // Auth screens always use the dark brand aesthetic
     return Scaffold(
-      backgroundColor:
-          isDark ? AppColors.darkBackground : const Color(0xFFF0F4F8),
+      backgroundColor: AppColors.darkBackground,
       body: SafeArea(
         child: SingleChildScrollView(
-          keyboardDismissBehavior:
-              ScrollViewKeyboardDismissBehavior.onDrag,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              const SizedBox(height: 40),
+              const SizedBox(height: 52),
 
-              // ── Logo ────────────────────────────────
-              Column(
-                children: [
-                  // Real logo image
-                  Image.asset(
-                    'assets/images/logo.png',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.contain,
+              // ── Logo + wordmark ──────────────────────────────────────────
+              _buildHeader(),
+
+              const SizedBox(height: 44),
+
+              // ── Form card ───────────────────────────────────────────────
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.darkSurface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0x1AFFFFFF),
+                    width: 0.5,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'InventarIA',
-                    style: AppTypography.largeTitle.copyWith(
-                      color: isDark
-                          ? AppColors.darkTextPrimary
-                          : AppColors.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Iniciar sesión',
+                      style: AppTypography.title3.copyWith(
+                        color: AppColors.darkTextPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Gestión inteligente de inventario',
-                    style: AppTypography.callout
-                        .copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 40),
-
-              // ── Email ──────────────────────────────
-              _formField(
-                label: 'Correo electrónico',
-                controller: _emailCtrl,
-                icon: Icons.email_outlined,
-                placeholder: 'tu@correo.com',
-                keyboardType: TextInputType.emailAddress,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 16),
-
-              // ── Password ───────────────────────────
-              _passwordField(isDark: isDark),
-              const SizedBox(height: 4),
-
-              // ── Forgot password ────────────────────
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => _showForgotPassword(context),
-                  child: Text(
-                    '¿Olvidaste tu contraseña?',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.deepSpaceBlue),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-
-              // ── Error banner ───────────────────────
-              if (loginError != null) ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: AppColors.error.withValues(alpha: 0.25)),
-                  ),
-                  child: Row(children: [
-                    const Icon(Icons.error_rounded,
-                        color: AppColors.error, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(loginError,
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.error)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Accede a tu panel de inventario',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.darkTextSecondary,
+                      ),
                     ),
-                  ]),
-                ),
-              ],
+                    const SizedBox(height: 24),
 
-              // ── Login button ───────────────────────
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: (_isValid && !isLoggingIn)
-                      ? () {
-                          context.hideKeyboard();
-                          final n = ref.read(authProvider.notifier);
-                          n.setLoginEmail(_emailCtrl.text);
-                          n.setLoginPassword(_passwordCtrl.text);
-                          n.login();
-                        }
-                      : null,
-                  style: primaryButtonStyle,
-                  child: isLoggingIn
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AppColors.inkBlack),
-                        )
-                      : const Text('Iniciar Sesión'),
+                    // Email
+                    _formField(
+                      label: 'Correo electrónico',
+                      controller: _emailCtrl,
+                      icon: Icons.email_outlined,
+                      placeholder: 'tu@correo.com',
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Password
+                    _passwordField(),
+                    const SizedBox(height: 8),
+
+                    // Forgot password
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => _showForgotPassword(context),
+                        child: Text(
+                          '¿Olvidaste tu contraseña?',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.freshSky,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Error banner
+                    if (loginError != null) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.error.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.error_outline_rounded,
+                              color: AppColors.error, size: 16),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(loginError,
+                                style: AppTypography.caption.copyWith(
+                                    color: AppColors.error)),
+                          ),
+                        ]),
+                      ),
+                    ],
+
+                    // Login button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: (_isValid && !isLoggingIn)
+                            ? () {
+                                context.hideKeyboard();
+                                final n = ref.read(authProvider.notifier);
+                                n.setLoginEmail(_emailCtrl.text);
+                                n.setLoginPassword(_passwordCtrl.text);
+                                n.login();
+                              }
+                            : null,
+                        style: primaryButtonStyle,
+                        child: isLoggingIn
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.inkBlack),
+                              )
+                            : const Text('Iniciar Sesión'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 28),
 
-              // ── Sign up link ───────────────────────
+              // Sign up link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     '¿No tienes cuenta?',
-                    style: AppTypography.callout
-                        .copyWith(color: AppColors.textSecondary),
+                    style: AppTypography.callout.copyWith(
+                        color: AppColors.darkTextSecondary),
                   ),
                   TextButton(
                     onPressed: () => _showSignUp(context),
                     child: Text(
                       'Crear cuenta',
                       style: AppTypography.callout.copyWith(
-                        color: AppColors.deepSpaceBlue,
+                        color: AppColors.teaGreen,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        // Logo container with Tea Green accent ring
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.teaGreen.withValues(alpha: 0.4),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.teaGreen.withValues(alpha: 0.15),
+                blurRadius: 20,
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 72,
+              height: 72,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'InventarIA',
+          style: AppTypography.largeTitle.copyWith(
+            color: AppColors.darkTextPrimary,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Gestión inteligente de inventario',
+          style: AppTypography.callout.copyWith(
+            color: AppColors.darkTextSecondary,
+          ),
+        ),
+      ],
     );
   }
 
@@ -197,28 +258,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required TextEditingController controller,
     required IconData icon,
     required String placeholder,
-    required bool isDark,
     TextInputType keyboardType = TextInputType.text,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: AppTypography.caption
-                .copyWith(color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
+        Text(
+          label,
+          style: AppTypography.caption.copyWith(
+            color: AppColors.darkTextSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: isDark
-                ? AppColors.darkSurfaceSecondary
-                : AppColors.surfaceSecondary,
+            color: AppColors.darkSurfaceSecondary,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.darkBorder, width: 1),
           ),
           child: Row(children: [
             Padding(
               padding: const EdgeInsets.only(left: 14),
-              child:
-                  Icon(icon, color: AppColors.textTertiary, size: 18),
+              child: Icon(icon, color: AppColors.darkTextTertiary, size: 18),
             ),
             Expanded(
               child: TextField(
@@ -227,13 +289,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 autocorrect: false,
                 textCapitalization: TextCapitalization.none,
                 onChanged: (_) => setState(() {}),
+                style: AppTypography.body.copyWith(
+                    color: AppColors.darkTextPrimary),
                 decoration: InputDecoration(
                   hintText: placeholder,
+                  hintStyle: AppTypography.body.copyWith(
+                      color: AppColors.darkTextTertiary),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
+                  filled: false,
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 14),
+                      horizontal: 12, vertical: 14),
                 ),
               ),
             ),
@@ -243,50 +310,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _passwordField({required bool isDark}) {
+  Widget _passwordField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Contraseña',
-            style: AppTypography.caption
-                .copyWith(color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
+        Text(
+          'Contraseña',
+          style: AppTypography.caption.copyWith(
+            color: AppColors.darkTextSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: isDark
-                ? AppColors.darkSurfaceSecondary
-                : AppColors.surfaceSecondary,
+            color: AppColors.darkSurfaceSecondary,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.darkBorder, width: 1),
           ),
           child: Row(children: [
             const Padding(
               padding: EdgeInsets.only(left: 14),
               child: Icon(Icons.lock_outline_rounded,
-                  color: AppColors.textTertiary, size: 18),
+                  color: AppColors.darkTextTertiary, size: 18),
             ),
             Expanded(
               child: TextField(
                 controller: _passwordCtrl,
                 obscureText: !_showPassword,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
+                style: AppTypography.body.copyWith(
+                    color: AppColors.darkTextPrimary),
+                decoration: InputDecoration(
                   hintText: '••••••••',
+                  hintStyle: AppTypography.body.copyWith(
+                      color: AppColors.darkTextTertiary),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 14),
+                  filled: false,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 14),
                 ),
               ),
             ),
             IconButton(
-              onPressed: () =>
-                  setState(() => _showPassword = !_showPassword),
+              onPressed: () => setState(() => _showPassword = !_showPassword),
               icon: Icon(
                 _showPassword
                     ? Icons.visibility_off_rounded
                     : Icons.visibility_rounded,
-                color: AppColors.textTertiary,
+                color: AppColors.darkTextTertiary,
                 size: 18,
               ),
             ),

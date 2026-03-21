@@ -127,7 +127,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       expandedHeight: 0,
       pinned: true,
       backgroundColor:
-          isDark ? AppColors.darkBackground : AppColors.deepSpaceBlue,
+          isDark ? AppColors.darkNavBackground : AppColors.inkBlack,
       title: Row(
         children: [
           // Logo miniatura en el AppBar

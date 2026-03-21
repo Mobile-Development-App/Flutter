@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../providers/providers.dart';
 import '../home/home_screen.dart';
@@ -13,8 +14,7 @@ class MainTabView extends ConsumerStatefulWidget {
   const MainTabView({super.key});
 
   @override
-  ConsumerState<MainTabView> createState() =>
-      _MainTabViewState();
+  ConsumerState<MainTabView> createState() => _MainTabViewState();
 }
 
 class _MainTabViewState extends ConsumerState<MainTabView> {
@@ -23,7 +23,7 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
   static const _screens = [
     HomeScreen(),
     ProductsScreen(),
-    SizedBox.shrink(), // placeholder for scan
+    SizedBox.shrink(),
     RestockScreen(),
     AnalyticsScreen(),
   ];
@@ -38,40 +38,34 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
     final invState = ref.watch(inventoryProvider).value;
 
     return Scaffold(
       body: Stack(
         children: [
-          // Screen content
           IndexedStack(
             index: _selectedIndex,
             children: _screens,
           ),
-          // Custom tab bar
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _buildTabBar(isDark, invState),
+            child: _buildTabBar(invState),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTabBar(bool isDark, invState) {
+  Widget _buildTabBar(invState) {
     return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.surface,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 8,
-            offset: Offset(0, -2),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        // Ink Black per spec — "Footer / bottom navigation background"
+        color: AppColors.inkBlack,
+        border: Border(
+          top: BorderSide(color: Color(0x33FFFFFF), width: 0.5),
+        ),
       ),
       child: SafeArea(
         top: false,
@@ -80,7 +74,8 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
           child: Row(
             children: List.generate(_tabs.length, (i) {
               final tab = _tabs[i];
-              // Center scan button
+
+              // ── Scan button (center) ─────────────────────────────────────
               if (i == 2) {
                 return Expanded(
                   child: GestureDetector(
@@ -92,31 +87,29 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
                         useSafeArea: true,
                         backgroundColor: Colors.transparent,
                         builder: (_) =>
-                            const _FullScreenModal(
-                                child: ScanScreen()),
-                      ).then((_) => null);
+                            const _FullScreenModal(child: ScanScreen()),
+                      );
                     },
                     child: Column(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 52,
-                          height: 52,
+                          width: 50,
+                          height: 50,
                           decoration: BoxDecoration(
+                            // Tea Green per spec — FAB / primary action
                             color: AppColors.teaGreen,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.teaGreen
-                                    .withValues(alpha: 0.35),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
+                                color: AppColors.teaGreen.withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
-                          child: Icon(
-                            tab.icon,
+                          child: const Icon(
+                            Icons.camera_enhance_rounded,
                             color: AppColors.inkBlack,
                             size: 22,
                           ),
@@ -126,6 +119,7 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
                   ),
                 );
               }
+
               final isSelected = _selectedIndex == i;
               return Expanded(
                 child: GestureDetector(
@@ -136,48 +130,62 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
                   child: Container(
                     color: Colors.transparent,
                     child: Column(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Icon(
-                              tab.icon,
-                              size: 22,
-                              color: isSelected
-                                  ? AppColors.freshSky
-                                  : AppColors.textTertiary,
-                            ),
-                            // Unread badge on Inicio tab
-                            if (i == 0 &&
-                                (invState?.unreadAlertCount ??
-                                        0) >
-                                    0)
-                              Positioned(
-                                right: -4,
-                                top: -4,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration:
-                                      const BoxDecoration(
-                                    color: AppColors.error,
-                                    shape: BoxShape.circle,
+                        // ── Indicator + icon ─────────────────────────────
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOut,
+                          width: isSelected ? 40 : 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            // Dust Gray indicator per spec — "Selected tab indicators"
+                            color: isSelected
+                                ? AppColors.dustGrey.withValues(alpha: 0.18)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                tab.icon,
+                                size: 20,
+                                // Selected: white. Inactive: Fresh Sky per spec
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.freshSky
+                                        .withValues(alpha: 0.7),
+                              ),
+                              // Alert badge on Inicio tab
+                              if (i == 0 &&
+                                  (invState?.unreadAlertCount ?? 0) > 0)
+                                Positioned(
+                                  right: -2,
+                                  top: -2,
+                                  child: Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.error,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
                           tab.label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
+                          style: AppTypography.overline.copyWith(
                             color: isSelected
-                                ? AppColors.freshSky
-                                : AppColors.textTertiary,
+                                ? Colors.white
+                                : AppColors.freshSky.withValues(alpha: 0.65),
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                           ),
                         ),
                       ],
@@ -205,9 +213,6 @@ class _FullScreenModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FractionallySizedBox(
-      heightFactor: 1.0,
-      child: child,
-    );
+    return FractionallySizedBox(heightFactor: 1.0, child: child);
   }
 }

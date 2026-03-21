@@ -14,41 +14,26 @@ class ProductCard extends StatelessWidget {
 
   Color get _categoryColor {
     switch (product.category) {
-      case ProductCategory.beverages:
-        return AppColors.freshSky;
-      case ProductCategory.dairy:
-        return AppColors.info;
-      case ProductCategory.snacks:
-        return AppColors.warning;
-      case ProductCategory.cleaning:
-        return AppColors.teaGreen;
-      case ProductCategory.personalCare:
-        return Colors.pink;
-      case ProductCategory.grains:
-        return Colors.brown;
-      case ProductCategory.fruits:
-        return AppColors.success;
-      case ProductCategory.meat:
-        return AppColors.error;
-      case ProductCategory.bakery:
-        return Colors.orange;
-      case ProductCategory.frozen:
-        return AppColors.freshSky;
-      case ProductCategory.condiments:
-        return Colors.red;
-      case ProductCategory.other:
-        return AppColors.textSecondary;
+      case ProductCategory.beverages:   return AppColors.freshSky;
+      case ProductCategory.dairy:       return AppColors.info;
+      case ProductCategory.snacks:      return AppColors.warning;
+      case ProductCategory.cleaning:    return AppColors.teaGreen;
+      case ProductCategory.personalCare:return Colors.pinkAccent;
+      case ProductCategory.grains:      return const Color(0xFFB8860B);
+      case ProductCategory.fruits:      return AppColors.success;
+      case ProductCategory.meat:        return AppColors.error;
+      case ProductCategory.bakery:      return Colors.orange;
+      case ProductCategory.frozen:      return AppColors.freshSky;
+      case ProductCategory.condiments:  return const Color(0xFFD84315);
+      case ProductCategory.other:       return AppColors.textSecondary;
     }
   }
 
   Color get _quantityColor {
     switch (product.stockStatus) {
-      case StockStatus.inStock:
-        return AppColors.success;
-      case StockStatus.lowStock:
-        return AppColors.warning;
-      case StockStatus.outOfStock:
-        return AppColors.error;
+      case StockStatus.inStock:   return AppColors.success;
+      case StockStatus.lowStock:  return AppColors.warning;
+      case StockStatus.outOfStock:return AppColors.error;
     }
   }
 
@@ -59,7 +44,7 @@ class ProductCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         decoration: cardDecoration(isDark: isDark),
         child: Row(
           children: [
@@ -68,23 +53,42 @@ class ProductCard extends StatelessWidget {
               categoryIcon: product.category.icon,
               categoryColor: _categoryColor,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    product.name,
-                    style: AppTypography.headline.copyWith(
-                      fontSize: 14,
-                      color: isDark
-                          ? AppColors.darkTextPrimary
-                          : AppColors.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // Name + price row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          style: AppTypography.headline.copyWith(
+                            fontSize: 14,
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        product.salePrice.currencyFormatted,
+                        style: AppTypography.callout.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
+                  // SKU + category
                   Text(
                     '${product.sku} · ${product.category.label}',
                     style: AppTypography.caption2.copyWith(
@@ -95,36 +99,21 @@ class ProductCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 8),
+                  // Badges row
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        product.salePrice.currencyFormatted,
-                        style: AppTypography.callout.copyWith(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? AppColors.darkTextPrimary
-                              : AppColors.textPrimary,
-                        ),
-                      ),
                       StockBadge(status: product.stockStatus),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
+                      const SizedBox(width: 6),
                       _MiniInsightChip(
                         icon: product.marginHealth.icon,
                         label: product.marginHealth.label,
                         color: product.marginHealth.color,
                       ),
+                      const SizedBox(width: 6),
                       _MiniInsightChip(
                         icon: product.stockTrend.icon,
-                        label: 'Tendencia ${product.stockTrend.label}',
+                        label: product.stockTrend.label,
                         color: product.stockTrend.color,
                       ),
                     ],
@@ -132,23 +121,39 @@ class ProductCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
+            // Quantity pill
             Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  '${product.quantity}',
-                  style: AppTypography.title3.copyWith(
-                    fontSize: 18,
-                    color: _quantityColor,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _quantityColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: _quantityColor.withValues(alpha: 0.25),
+                        width: 0.5),
                   ),
-                ),
-                Text(
-                  'uds',
-                  style: AppTypography.caption2.copyWith(
-                    color: isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.textSecondary,
+                  child: Column(
+                    children: [
+                      Text(
+                        '${product.quantity}',
+                        style: AppTypography.headline.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: _quantityColor,
+                        ),
+                      ),
+                      Text(
+                        'uds',
+                        style: AppTypography.overline.copyWith(
+                          color: _quantityColor.withValues(alpha: 0.8),
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -174,21 +179,23 @@ class _MiniInsightChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 3),
           Text(
             label,
-            style: AppTypography.caption2.copyWith(
+            style: AppTypography.overline.copyWith(
               color: color,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
+              fontSize: 9,
             ),
           ),
         ],
@@ -197,9 +204,9 @@ class _MiniInsightChip extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-// _ProductThumb — shows real image or category icon fallback
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _ProductThumb
+// ─────────────────────────────────────────────────────────────────────────────
 class _ProductThumb extends StatefulWidget {
   final String? imageURL;
   final IconData categoryIcon;
@@ -221,9 +228,7 @@ class _ProductThumbState extends State<_ProductThumb> {
   @override
   void didUpdateWidget(_ProductThumb old) {
     super.didUpdateWidget(old);
-    if (old.imageURL != widget.imageURL) {
-      _imgFailed = false;
-    }
+    if (old.imageURL != widget.imageURL) _imgFailed = false;
   }
 
   @override
@@ -233,12 +238,12 @@ class _ProductThumbState extends State<_ProductThumb> {
     final hasImage = url != null && url.isNotEmpty && !_imgFailed;
 
     return Container(
-      width: 52,
-      height: 52,
+      width: 54,
+      height: 54,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 0.5),
       ),
       clipBehavior: Clip.antiAlias,
       child: hasImage
@@ -252,9 +257,7 @@ class _ProductThumbState extends State<_ProductThumb> {
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: color,
-                    ),
+                        strokeWidth: 1.5, color: color),
                   ),
                 );
               },

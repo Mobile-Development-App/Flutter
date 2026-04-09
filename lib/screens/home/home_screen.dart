@@ -410,7 +410,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       mainAxisSpacing: 10,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 2.1,
+      childAspectRatio: 1.45,
       children: [
         StatCard(
           title: 'Total Productos',

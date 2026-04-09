@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_constants.dart';
+import 'pipeline_logger.dart';
 
 // ─────────────────────────────────────────────
 // ApiException
@@ -101,17 +102,34 @@ class ApiService {
   Future<dynamic> get(String path, {Map<String, String>? query}) async {
     final uri = _buildUri(path, query);
     debugPrint('[API] GET $uri');
+    final sw  = Stopwatch()..start();
     final res = await http.get(uri, headers: _headers)
         .timeout(const Duration(seconds: 15));
+    sw.stop();
+    // INGESTION layer: log every REST call
+    PipelineLogger.shared.log(
+      stage:       PipelineStage.ingestion,
+      operation:   'GET $path',
+      recordCount: 0,           // record count resolved by caller after parse
+      latency:     sw.elapsed,
+    );
     return _handle(res);
   }
 
   Future<dynamic> post(String path, Map<String, dynamic> body) async {
     final uri = _buildUri(path);
     debugPrint('[API] POST $uri');
+    final sw  = Stopwatch()..start();
     final res = await http
         .post(uri, headers: _headers, body: jsonEncode(body))
         .timeout(const Duration(seconds: 15));
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage:       PipelineStage.ingestion,
+      operation:   'POST $path',
+      recordCount: 0,
+      latency:     sw.elapsed,
+    );
     return _handle(res);
   }
 

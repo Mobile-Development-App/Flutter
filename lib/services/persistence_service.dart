@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
+import 'pipeline_logger.dart';
 
 // ─────────────────────────────────────────────
 // AuditEvent (local audit trail)
@@ -133,6 +134,13 @@ class PersistenceService {
         ? events.sublist(events.length - 1000)
         : events;
     await _saveList(_kAuditLog, trimmed, (e) => e.toJson());
+    // STORAGE layer — local SharedPreferences write (offline-first)
+    PipelineLogger.shared.log(
+      stage:       PipelineStage.storage,
+      operation:   'logAuditEvent → SharedPreferences [local]',
+      recordCount: trimmed.length,
+      latency:     Duration.zero,
+    );
   }
 
   // ── Stores ─────────────────────────────────

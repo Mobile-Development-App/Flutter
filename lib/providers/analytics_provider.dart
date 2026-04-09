@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/constants/api_constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/pipeline_logger.dart';
+import '../services/data_processing_service.dart';
 import '../core/utils/extensions.dart';
 import 'inventory_provider.dart';
 
@@ -32,6 +34,8 @@ class AnalyticsState {
   final bool isExporting;
   final bool exportSuccess;
   final bool isLoading;
+  // Pipeline observability — surfaced to AnalyticsScreen
+  final Map<PipelineStage, PipelineStageSummary> pipelineMetrics;
 
   const AnalyticsState({
     this.selectedTimeRange    = TimeRange.week,
@@ -41,7 +45,10 @@ class AnalyticsState {
     this.isExporting          = false,
     this.exportSuccess        = false,
     this.isLoading            = false,
+    this.pipelineMetrics      = const {},
   });
+
+  // ── Computation Layer: derived properties ──
 
   double get totalSales =>
       salesData.fold<double>(0.0, (s, p) => s + p.sales);
@@ -69,6 +76,7 @@ class AnalyticsState {
     bool? isExporting,
     bool? exportSuccess,
     bool? isLoading,
+    Map<PipelineStage, PipelineStageSummary>? pipelineMetrics,
   }) =>
       AnalyticsState(
         selectedTimeRange:    selectedTimeRange    ?? this.selectedTimeRange,
@@ -78,133 +86,78 @@ class AnalyticsState {
         isExporting:          isExporting          ?? this.isExporting,
         exportSuccess:        exportSuccess        ?? this.exportSuccess,
         isLoading:            isLoading            ?? this.isLoading,
+        pipelineMetrics:      pipelineMetrics      ?? this.pipelineMetrics,
       );
 }
 
 // ─────────────────────────────────────────────
 // AnalyticsNotifier
-// - Sales trend: real API, fallback MockData
-// - Stock levels: computed from real products (API endpoint unreliable)
-// - Category dist: computed from real products (endpoint returns 404)
+//
+// Pipeline responsibilities per layer:
+//   INGESTION  — ApiService.get() → Cloud Functions REST
+//   PROCESSING — DataProcessingService (real-time client) /
+//                Cloud Functions cron (batch server-side)
+//   COMPUTATION— AnalyticsState derived props (salesTrend, totalSales…)
+//   PRESENTATION — AsyncData emitted to AnalyticsScreen ConsumerWidget
 // ─────────────────────────────────────────────
 class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
-  final _api = ApiService.shared;
+  final _api        = ApiService.shared;
+  final _processing = DataProcessingService.shared;
+  final _pipeline   = PipelineLogger.shared;
 
   @override
   Future<AnalyticsState> build() async {
-    // Watch inventory so charts auto-update when products change
     final invState = ref.watch(inventoryProvider).value;
     final products = invState?.products ?? [];
 
+    final sales       = await _fetchSalesTrend(TimeRange.week);
+    final stockResult = _processing.aggregateStockByCategory(products);
+    final catResult   = _processing.aggregateCategoryDistribution(products);
+
+    _pipeline.log(
+      stage:       PipelineStage.computation,
+      operation:   'AnalyticsState.build — derived props ready',
+      recordCount: products.length,
+      latency:     Duration.zero,
+    );
+
     return AnalyticsState(
-      salesData:            await _fetchSalesTrend(TimeRange.week),
-      stockLevelData:       _buildStockLevelData(products),
-      categoryDistribution: _buildCategoryDistribution(products),
+      salesData:            sales,
+      stockLevelData:       stockResult.data,
+      categoryDistribution: catResult.data,
+      pipelineMetrics:      _pipeline.summary,
     );
   }
 
-  // ── Real API: Sales trend ─────────────────
+  // ── INGESTION: sales trend via REST ───────
 
   Future<List<SalesDataPoint>> _fetchSalesTrend(TimeRange range) async {
-    try {
-      debugPrint('[Analytics] GET $kAnalyticsSalesTrend?period=${range.value}');
-      final data = await _api.get(
-        kAnalyticsSalesTrend,
-        query: {'period': range.value},
-      ) as dynamic;
-
-      debugPrint('[Analytics] salesTrend raw type: ${data.runtimeType}');
-      if (data is Map) debugPrint('[Analytics] salesTrend keys: ${data.keys.toList()}');
-
-      final list = _extractList(data);
-      if (list.isEmpty) {
-        debugPrint('[Analytics] ⚠️  FALLBACK — salesTrend empty, using MockData');
-        return MockData.generateSalesData(days: range.days);
-      }
-
-      final result = list.map((e) {
-        final map = e as Map<String, dynamic>;
-        return SalesDataPoint(
-          id:     map['id']     as String? ?? map['date'] as String? ?? '',
-          date:   ApiService.parseDate(map['date']) ?? DateTime.now(),
-          sales:  (map['total']  as num?)?.toDouble() ??
-                  (map['sales']  as num?)?.toDouble() ?? 0.0,
-          orders: (map['orders'] as num?)?.toInt() ??
-                  (map['count']  as num?)?.toInt() ?? 0,
-        );
-      }).toList();
-      debugPrint('[Analytics] ✅ salesTrend: ${result.length} points from backend');
-      return result;
-    } catch (e) {
-      debugPrint('[Analytics] ⚠️  FALLBACK — fetchSalesTrend failed: $e');
-      return MockData.generateSalesData(days: range.days);
-    }
-  }
-
-  // ── Computed locally from real products ───
-
-  /// Groups products by category and counts inStock / lowStock / outOfStock
-  List<StockLevelData> _buildStockLevelData(List<Product> products) {
-    if (products.isEmpty) {
-      debugPrint('[Analytics] ⚠️  stockLevels — no products yet, using MockData');
-      return MockData.stockLevelData;
-    }
-
-    final Map<String, _StockBucket> buckets = {};
-
-    for (final p in products) {
-      final key = p.category.label;
-      buckets.putIfAbsent(key, () => _StockBucket(key));
-      switch (p.stockStatus) {
-        case StockStatus.inStock:
-          buckets[key]!.inStock++;
-        case StockStatus.lowStock:
-          buckets[key]!.lowStock++;
-        case StockStatus.outOfStock:
-          buckets[key]!.outOfStock++;
-      }
-    }
-
-    final result = buckets.entries.map((e) => StockLevelData(
-          id:         e.key,
-          category:   e.key,
-          inStock:    e.value.inStock,
-          lowStock:   e.value.lowStock,
-          outOfStock: e.value.outOfStock,
-        )).toList();
-
-    debugPrint('[Analytics] ✅ stockLevels computed from ${products.length} products → ${result.length} categories');
-    return result;
-  }
-
-  /// Builds category distribution from real product list
-  List<CategoryDistribution> _buildCategoryDistribution(List<Product> products) {
-    if (products.isEmpty) {
-      debugPrint('[Analytics] ⚠️  categoryDist — no products yet, using MockData');
-      return MockData.categoryDistribution;
-    }
-
-    final Map<String, int> counts = {};
-    for (final p in products) {
-      final key = p.category.label;
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-
-    final total = products.length;
-    final result = counts.entries
-        .where((e) => e.value > 0)
-        .map((e) => CategoryDistribution(
-              id:         e.key,
-              category:   e.key,
-              count:      e.value,
-              percentage: (e.value / total) * 100,
-              value:      0,
-            ))
-        .toList()
-      ..sort((a, b) => b.count.compareTo(a.count));
-
-    debugPrint('[Analytics] ✅ categoryDist computed from ${products.length} products → ${result.length} categories');
-    return result;
+    return _pipeline.measure<List<SalesDataPoint>>(
+      stage:     PipelineStage.ingestion,
+      operation: 'GET $kAnalyticsSalesTrend?period=${range.value}',
+      call: () async {
+        final data = await _api.get(
+          kAnalyticsSalesTrend,
+          query: {'period': range.value},
+        ) as dynamic;
+        final list = _extractList(data);
+        if (list.isEmpty) throw Exception('empty response');
+        return list.map((e) {
+          final map = e as Map<String, dynamic>;
+          return SalesDataPoint(
+            id:     map['id']    as String? ?? map['date'] as String? ?? '',
+            date:   ApiService.parseDate(map['date']) ?? DateTime.now(),
+            sales:  (map['total']  as num?)?.toDouble() ??
+                    (map['sales']  as num?)?.toDouble() ?? 0.0,
+            orders: (map['orders'] as num?)?.toInt() ??
+                    (map['count']  as num?)?.toInt() ?? 0,
+          );
+        }).toList();
+      },
+      countRecords:   (list) => list.length,
+      onFallback:     (_)    => MockData.generateSalesData(days: range.days),
+      fallbackReason: 'API unavailable — MockData fallback',
+    );
   }
 
   List<dynamic> _extractList(dynamic data) {
@@ -224,25 +177,41 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
     _update((s) => s.copyWith(isLoading: true, selectedTimeRange: range));
     final invState = ref.read(inventoryProvider).value;
     final products = invState?.products ?? [];
-    final sales    = await _fetchSalesTrend(range);
+
+    final sales       = await _fetchSalesTrend(range);
+    final stockResult = _processing.aggregateStockByCategory(products);
+    final catResult   = _processing.aggregateCategoryDistribution(products);
+
+    _pipeline.log(
+      stage:       PipelineStage.presentation,
+      operation:   'loadData → AnalyticsScreen render',
+      recordCount: sales.length + stockResult.data.length + catResult.data.length,
+      latency:     Duration.zero,
+    );
+
     _update((s) => s.copyWith(
       isLoading:            false,
       selectedTimeRange:    range,
       salesData:            sales,
-      stockLevelData:       _buildStockLevelData(products),
-      categoryDistribution: _buildCategoryDistribution(products),
+      stockLevelData:       stockResult.data,
+      categoryDistribution: catResult.data,
+      pipelineMetrics:      _pipeline.summary,
     ));
   }
 
   Future<void> refreshAll() async {
-    debugPrint('[Analytics] Manual refresh triggered');
+    debugPrint('[Analytics] Manual refresh');
     state = const AsyncLoading();
     final invState = ref.read(inventoryProvider).value;
     final products = invState?.products ?? [];
-    state = await AsyncValue.guard(() async => AnalyticsState(
-      salesData:            await _fetchSalesTrend(state.value?.selectedTimeRange ?? TimeRange.week),
-      stockLevelData:       _buildStockLevelData(products),
-      categoryDistribution: _buildCategoryDistribution(products),
+    final sales       = await _fetchSalesTrend(state.value?.selectedTimeRange ?? TimeRange.week);
+    final stockResult = _processing.aggregateStockByCategory(products);
+    final catResult   = _processing.aggregateCategoryDistribution(products);
+    state = AsyncData(AnalyticsState(
+      salesData:            sales,
+      stockLevelData:       stockResult.data,
+      categoryDistribution: catResult.data,
+      pipelineMetrics:      _pipeline.summary,
     ));
   }
 
@@ -258,8 +227,15 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
           'to': DateTime.now().toIso8601String(),
         },
       });
+      _pipeline.log(
+        stage: PipelineStage.presentation, operation: 'exportReport → PDF',
+        recordCount: 1, latency: Duration.zero,
+      );
       debugPrint('[Analytics] ✅ Export sent');
     } catch (e) {
+      _pipeline.logFallback(
+        stage: PipelineStage.presentation, operation: 'exportReport', reason: e.toString(),
+      );
       debugPrint('[Analytics] ⚠️  exportReport failed: $e');
     }
     await HapticManager.success();
@@ -272,12 +248,6 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
     final current = state.value;
     if (current != null) state = AsyncData(fn(current));
   }
-}
-
-class _StockBucket {
-  final String category;
-  int inStock = 0, lowStock = 0, outOfStock = 0;
-  _StockBucket(this.category);
 }
 
 // ─────────────────────────────────────────────

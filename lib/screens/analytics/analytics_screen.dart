@@ -164,16 +164,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 54,
+                              reservedSize: 68,
                               interval: _horizontalStep(salesSpots),
                               getTitlesWidget: (value, meta) {
                                 return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.only(right: 6),
                                   child: Text(
                                     _compactCurrency(value),
                                     style: AppTypography.caption2.copyWith(
                                       color: AppColors.textSecondary,
+                                      fontSize: 10,
                                     ),
+                                    textAlign: TextAlign.right,
+                                    maxLines: 1,
                                   ),
                                 );
                               },
@@ -416,45 +419,53 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     required Color subtitleColor,
   }) {
     return AppCard(
-      padding: const EdgeInsets.all(18),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 150),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 24, color: iconColor),
-            const SizedBox(height: 16),
-            Text(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
+          ),
+          const SizedBox(height: 10),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
               value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: AppTypography.title2.copyWith(
+                fontSize: 18,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.title3.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.callout.copyWith(
-                color: subtitleColor,
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption2.copyWith(
+              color: subtitleColor,
+              fontWeight: FontWeight.w700,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1013,7 +1024,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   double _horizontalStep(List<FlSpot> spots) {
     if (spots.isEmpty) return 1;
     final range = _maxY(spots) - _minY(spots);
-    return range <= 0 ? 1 : range / 3;
+    return range <= 0 ? 1 : range / 4;
   }
 
   String _xLabel(int index, int total) {

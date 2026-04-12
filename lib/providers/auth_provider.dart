@@ -8,6 +8,7 @@ import '../core/constants/api_constants.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
 import '../core/utils/extensions.dart';
+import '../core/utils/validators.dart';
 
 // ─────────────────────────────────────────────
 // AuthState
@@ -58,17 +59,15 @@ class AuthState {
   });
 
   bool get isLoginValid =>
-      loginEmail.isNotEmpty &&
       loginPassword.isNotEmpty &&
-      loginEmail.contains('@');
+      AppValidators.isValidEmail(loginEmail); // FIX: validación real de email
 
   bool get isSignUpValid =>
-      signUpName.isNotEmpty &&
-      signUpEmail.isNotEmpty &&
-      signUpEmail.contains('@') &&
-      signUpPassword.length >= 8 &&
-      signUpPassword == signUpConfirmPassword &&
-      signUpStoreName.isNotEmpty &&
+      AppValidators.isValidName(signUpName) &&       // FIX: sin emojis, no solo espacios
+      AppValidators.isValidEmail(signUpEmail) &&     // FIX: validación real de email
+      AppValidators.isValidPassword(signUpPassword) &&
+      signUpPassword == signUpConfirmPassword &&     // FIX: verificación real
+      AppValidators.isValidName(signUpStoreName) &&  // FIX: sin emojis, no solo espacios
       signUpAcceptedTerms;
 
   bool get passwordsMatch    => signUpPassword == signUpConfirmPassword;
@@ -356,9 +355,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   Future<void> sendPasswordReset() async {
     final s = state.value;
-    if (s == null ||
-        s.forgotPasswordEmail.isEmpty ||
-        !s.forgotPasswordEmail.contains('@')) {
+    if (s == null || !AppValidators.isValidEmail(s.forgotPasswordEmail)) {
+      // FIX: validación real de email (no solo contains('@'))
       _update((c) => c.copyWith(
           forgotPasswordError: 'Ingresa un correo electrónico válido'));
       return;

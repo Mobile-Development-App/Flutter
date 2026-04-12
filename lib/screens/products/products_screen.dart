@@ -8,6 +8,8 @@ import '../../providers/inventory_provider.dart';
 import '../../widgets/widgets.dart';
 import 'add_product_screen.dart';
 import 'product_detail_screen.dart';
+// Sprint 3 — BQ5: screen session tracking
+import '../../core/utils/screen_tracker_mixin.dart';
 
 class ProductsScreen extends ConsumerStatefulWidget {
   const ProductsScreen({super.key});
@@ -17,7 +19,11 @@ class ProductsScreen extends ConsumerStatefulWidget {
       _ProductsScreenState();
 }
 
-class _ProductsScreenState extends ConsumerState<ProductsScreen> {
+class _ProductsScreenState extends ConsumerState<ProductsScreen>
+    with ScreenTrackerMixin {
+
+  @override
+  String get trackedScreenName => 'products'; // BQ5
   final _searchCtrl = TextEditingController();
 
   @override

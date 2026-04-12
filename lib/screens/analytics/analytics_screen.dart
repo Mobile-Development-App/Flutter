@@ -10,6 +10,9 @@ import '../../core/utils/extensions.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
+// Sprint 3 — BQ7·BQ8
+import '../../services/usage_tracking_service.dart';
+import 'usage_insights_screen.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -47,9 +50,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
       appBar: AppBar(
         title: const Text('Analítica'),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
+        actions: [
+          // Sprint 3 — acceso directo a BQ1 · BQ5 · BQ7 · BQ8
+          IconButton(
+            icon: const Icon(Icons.insights_rounded),
+            tooltip: 'Insights Sprint 3',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const UsageInsightsScreen(),
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(right: 8),
             child: Icon(Icons.file_upload_outlined),
           ),
         ],
@@ -85,6 +98,15 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           final salesSpots = _buildSalesTrend(products, _selectedDays);
           final stockBars = _buildStockBarData(products);
           final categorySections = _buildCategorySections(products);
+
+          // BQ8 — registra que el usuario accedió a las funciones analíticas
+          // Se ejecuta una vez por build cuando la data está disponible.
+          // Usando addPostFrameCallback para no mutar estado durante build.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            UsageTrackingService.shared.trackFeatureUsed('salesTrendChart');
+            UsageTrackingService.shared.trackFeatureUsed('stockBarChart');
+            UsageTrackingService.shared.trackFeatureUsed('categoryPieChart');
+          });
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(10, 14, 10, 26),

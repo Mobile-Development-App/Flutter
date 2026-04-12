@@ -9,6 +9,8 @@ import '../../services/api_service.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
+// Sprint 3 — BQ7: track entry method (barcode vs manual) for accuracy analysis
+import '../../services/usage_tracking_service.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   final Product? editingProduct;
@@ -763,8 +765,17 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     if (_isEditing) {
       ref.read(inventoryProvider.notifier).updateProduct(product);
+      // BQ7 — una corrección manual marca el registro previo como inexacto
+      UsageTrackingService.shared.markEntryInaccurate(product.id);
     } else {
       ref.read(inventoryProvider.notifier).addProduct(product);
+      // BQ7 — registra si el producto fue ingresado vía escaneo o manualmente
+      final viaBarcode = widget.fromScan != null;
+      UsageTrackingService.shared.trackProductEntry(
+        productId: product.id,
+        viaBarcode: viaBarcode,
+        isAccurate: true, // se asume preciso hasta que el usuario corrija
+      );
     }
 
     setState(() => _showSuccess = true);

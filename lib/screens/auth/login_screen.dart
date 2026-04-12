@@ -4,6 +4,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../core/utils/validators.dart';
+import 'package:flutter/services.dart';
 import '../../providers/providers.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
@@ -28,9 +30,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   bool get _isValid =>
-      _emailCtrl.text.isNotEmpty &&
       _passwordCtrl.text.isNotEmpty &&
-      _emailCtrl.text.contains('@');
+      AppValidators.isValidEmail(_emailCtrl.text); // FIX: validación real
 
   @override
   Widget build(BuildContext context) {

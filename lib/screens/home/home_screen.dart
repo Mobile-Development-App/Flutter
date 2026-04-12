@@ -12,6 +12,8 @@ import '../products/add_product_screen.dart';
 import '../products/products_screen.dart';
 import '../restock/restock_screen.dart';
 import '../settings/settings_screen.dart';
+// Sprint 3 — BQ5: screen session tracking
+import '../../core/utils/screen_tracker_mixin.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +23,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, ScreenTrackerMixin {
+
+  @override
+  String get trackedScreenName => 'home'; // BQ5
   late AnimationController _pulseCtrl;
   late AnimationController _fadeCtrl;
   late Animation<double> _pulse;

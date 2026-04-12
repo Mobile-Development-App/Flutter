@@ -7,6 +7,8 @@ import '../../core/utils/extensions.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../widgets/widgets.dart';
+// Sprint 3 — BQ5: screen session tracking
+import '../../core/utils/screen_tracker_mixin.dart';
 
 class RestockScreen extends ConsumerStatefulWidget {
   const RestockScreen({super.key});
@@ -16,7 +18,12 @@ class RestockScreen extends ConsumerStatefulWidget {
       _RestockScreenState();
 }
 
-class _RestockScreenState extends ConsumerState<RestockScreen> {
+class _RestockScreenState extends ConsumerState<RestockScreen>
+    with ScreenTrackerMixin {
+
+  @override
+  String get trackedScreenName => 'restock'; // BQ5
+
   final Map<String, TextEditingController> _qtyControllers = {};
   bool _showPurchaseList = false;
   List<_PurchaseItem> _purchaseItems = [];

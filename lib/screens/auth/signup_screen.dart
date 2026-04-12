@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../core/utils/validators.dart';
 import '../../providers/providers.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -25,8 +27,38 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _storeAddressCtrl = TextEditingController();
   final _storePhoneCtrl   = TextEditingController();
 
-  bool _showPassword   = false;
-  bool _acceptedTerms  = false;
+  bool _showPassword        = false;
+  bool _showConfirmPassword = false; // FIX: también se puede mostrar/ocultar
+  bool _acceptedTerms       = false;
+
+  // ── Formatters reutilizables ──────────────────
+
+  /// Bloquea emojis en cualquier campo de texto.
+  static final _noEmojiFormatter = FilteringTextInputFormatter.deny(
+    RegExp(
+      r'[\u{1F000}-\u{1FFFF}]'
+      r'|[\u{2600}-\u{27BF}]'
+      r'|[\u{FE00}-\u{FE0F}]'
+      r'|[\u{1F900}-\u{1FAFF}]'
+      r'|\u{200D}'
+      r'|\u{20E3}',
+      unicode: true,
+    ),
+  );
+
+  /// Bloquea espacios (para el campo email) y emojis.
+  static final _emailFormatter = FilteringTextInputFormatter.deny(
+    RegExp(
+      r'\s'                    // cualquier espacio/tab/newline
+      r'|[\u{1F000}-\u{1FFFF}]'
+      r'|[\u{2600}-\u{27BF}]'
+      r'|[\u{FE00}-\u{FE0F}]'
+      r'|[\u{1F900}-\u{1FAFF}]'
+      r'|\u{200D}'
+      r'|\u{20E3}',
+      unicode: true,
+    ),
+  );
 
   @override
   void dispose() {
@@ -39,16 +71,29 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
+  // ── Validaciones ──────────────────────────────
+
   bool get _passwordsMatch    => _passCtrl.text == _confirmPassCtrl.text;
-  bool get _passwordLengthValid => _passCtrl.text.length >= 8;
+  bool get _passwordLengthValid => AppValidators.isValidPassword(_passCtrl.text);
+
+  // FIX: email ahora usa validación real (regex + sin espacios + sin emojis)
+  bool get _emailValid => AppValidators.isValidEmail(_emailCtrl.text);
+
+  // FIX: nombre y tienda verifican que no sean solo espacios y sin emojis
+  bool get _nameValid =>
+      _nameCtrl.text.trim().isNotEmpty &&
+      !AppValidators.hasEmoji(_nameCtrl.text);
+
+  bool get _storeNameValid =>
+      _storeNameCtrl.text.trim().isNotEmpty &&
+      !AppValidators.hasEmoji(_storeNameCtrl.text);
 
   bool get _isValid =>
-      _nameCtrl.text.isNotEmpty &&
-      _emailCtrl.text.isNotEmpty &&
-      _emailCtrl.text.contains('@') &&
+      _nameValid &&
+      _emailValid &&
       _passwordLengthValid &&
       _passwordsMatch &&
-      _storeNameCtrl.text.isNotEmpty &&
+      _storeNameValid &&
       _acceptedTerms;
 
   @override
@@ -143,6 +188,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     _sectionLabel(
                         'Datos Personales', Icons.person_outline_rounded),
                     const SizedBox(height: 10),
+
+                    // FIX: campo nombre con formatter anti-emoji
                     _formField(
                       label: 'Nombre completo',
                       ctrl: _nameCtrl,
@@ -150,8 +197,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       icon: Icons.person_outline_rounded,
                       isDark: isDark,
                       textCapitalization: TextCapitalization.words,
+                      inputFormatters: [_noEmojiFormatter],
                     ),
+
+                    // FIX: mostrar error si nombre tiene emoji
+                    if (_nameCtrl.text.isNotEmpty &&
+                        AppValidators.hasEmoji(_nameCtrl.text)) ...[
+                      const SizedBox(height: 4),
+                      _fieldError('El nombre no puede contener emojis'),
+                    ],
                     const SizedBox(height: 12),
+
+                    // FIX: campo email con formatter (sin espacios, sin emojis)
                     _formField(
                       label: 'Correo electrónico',
                       ctrl: _emailCtrl,
@@ -159,8 +216,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       icon: Icons.email_outlined,
                       isDark: isDark,
                       keyboardType: TextInputType.emailAddress,
+                      inputFormatters: [_emailFormatter],
                     ),
+
+                    // FIX: error inline de email con formato inválido
+                    if (_emailCtrl.text.isNotEmpty && !_emailValid) ...[
+                      const SizedBox(height: 4),
+                      _fieldError('Ingresa un correo válido (ej: tu@correo.com)'),
+                    ],
                     const SizedBox(height: 12),
+
                     _passwordField(isDark),
                     const SizedBox(height: 12),
                     _confirmPasswordField(isDark),
@@ -177,6 +242,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                           .copyWith(color: AppColors.textTertiary),
                     ),
                     const SizedBox(height: 10),
+
+                    // FIX: campo tienda con formatter anti-emoji
                     _formField(
                       label: 'Nombre de la tienda *',
                       ctrl: _storeNameCtrl,
@@ -184,6 +251,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       icon: Icons.storefront_outlined,
                       isDark: isDark,
                       textCapitalization: TextCapitalization.words,
+                      inputFormatters: [_noEmojiFormatter],
                     ),
                     const SizedBox(height: 12),
                     _formField(
@@ -202,6 +270,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       icon: Icons.phone_outlined,
                       isDark: isDark,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
                     ),
 
                     const SizedBox(height: 20),
@@ -295,7 +366,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final n = ref.read(authProvider.notifier);
     n.setSignUpName(_nameCtrl.text.trim());
     n.setSignUpEmail(_emailCtrl.text.trim());
-    n.setSignUpPassword(_passCtrl.text);
+    n.setSignUpPassword(_passCtrl.text);          // contraseña NO se trim-ea
     n.setSignUpConfirmPassword(_confirmPassCtrl.text);
     n.setSignUpStoreName(_storeNameCtrl.text.trim());
     n.setSignUpStoreAddress(_storeAddressCtrl.text.trim());
@@ -304,7 +375,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     n.signUp();
   }
 
-  // ── Widgets ───────────────────────────────
+  // ── Widgets ───────────────────────────────────
 
   Widget _sectionLabel(String title, IconData icon) {
     return Row(children: [
@@ -337,6 +408,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     );
   }
 
+  /// Mensaje de error inline debajo de un campo.
+  Widget _fieldError(String message) {
+    return Text(
+      message,
+      style: AppTypography.caption2.copyWith(color: AppColors.error),
+    );
+  }
+
   Widget _formField({
     required String label,
     required TextEditingController ctrl,
@@ -345,6 +424,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     required bool isDark,
     TextInputType keyboardType = TextInputType.text,
     TextCapitalization textCapitalization = TextCapitalization.none,
+    List<TextInputFormatter>? inputFormatters, // FIX: parámetro añadido
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,6 +451,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 keyboardType: keyboardType,
                 textCapitalization: textCapitalization,
                 autocorrect: false,
+                inputFormatters: inputFormatters, // FIX: aplicado
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   hintText: hint,
@@ -439,14 +520,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         ),
         if (_passCtrl.text.isNotEmpty && !_passwordLengthValid) ...[
           const SizedBox(height: 4),
-          Text('Mínimo 8 caracteres',
-              style: AppTypography.caption2
-                  .copyWith(color: AppColors.error)),
+          _fieldError('Mínimo 8 caracteres'),
         ],
       ],
     );
   }
 
+  // FIX: el campo de confirmar contraseña ahora también tiene botón de ojo
   Widget _confirmPasswordField(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,7 +551,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             Expanded(
               child: TextField(
                 controller: _confirmPassCtrl,
-                obscureText: true,
+                obscureText: !_showConfirmPassword, // FIX: controlado
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   hintText: 'Repite tu contraseña',
@@ -483,13 +563,24 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
               ),
             ),
+            // FIX: botón de ojo añadido
+            IconButton(
+              onPressed: () => setState(
+                  () => _showConfirmPassword = !_showConfirmPassword),
+              icon: Icon(
+                _showConfirmPassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: AppColors.textTertiary,
+                size: 18,
+              ),
+            ),
           ]),
         ),
+        // FIX: sólo muestra error cuando ambos campos tienen contenido
         if (_confirmPassCtrl.text.isNotEmpty && !_passwordsMatch) ...[
           const SizedBox(height: 4),
-          Text('Las contraseñas no coinciden',
-              style: AppTypography.caption2
-                  .copyWith(color: AppColors.error)),
+          _fieldError('Las contraseñas no coinciden'),
         ],
       ],
     );

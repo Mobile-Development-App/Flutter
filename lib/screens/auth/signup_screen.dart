@@ -28,12 +28,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _storePhoneCtrl   = TextEditingController();
 
   bool _showPassword        = false;
-  bool _showConfirmPassword = false; // FIX: también se puede mostrar/ocultar
+  bool _showConfirmPassword = false;
   bool _acceptedTerms       = false;
+  /// Muestra el panel de reglas de contraseña al hacer foco en el campo.
+  bool _showPasswordRules   = false;
 
   // ── Formatters reutilizables ──────────────────
 
-  /// Bloquea emojis en cualquier campo de texto.
   static final _noEmojiFormatter = FilteringTextInputFormatter.deny(
     RegExp(
       r'[\u{1F000}-\u{1FFFF}]'
@@ -46,10 +47,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     ),
   );
 
-  /// Bloquea espacios (para el campo email) y emojis.
+  /// Bloquea espacios y emojis (para el campo email).
   static final _emailFormatter = FilteringTextInputFormatter.deny(
     RegExp(
-      r'\s'                    // cualquier espacio/tab/newline
+      r'\s'
       r'|[\u{1F000}-\u{1FFFF}]'
       r'|[\u{2600}-\u{27BF}]'
       r'|[\u{FE00}-\u{FE0F}]'
@@ -73,25 +74,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   // ── Validaciones ──────────────────────────────
 
-  bool get _passwordsMatch    => _passCtrl.text == _confirmPassCtrl.text;
-  bool get _passwordLengthValid => AppValidators.isValidPassword(_passCtrl.text);
-
-  // FIX: email ahora usa validación real (regex + sin espacios + sin emojis)
-  bool get _emailValid => AppValidators.isValidEmail(_emailCtrl.text);
-
-  // FIX: nombre y tienda verifican que no sean solo espacios y sin emojis
-  bool get _nameValid =>
+  bool get _passwordsMatch      => _passCtrl.text == _confirmPassCtrl.text;
+  bool get _passwordValid       => AppValidators.isValidPassword(_passCtrl.text);
+  bool get _emailValid          => AppValidators.isValidEmail(_emailCtrl.text);
+  bool get _nameValid           =>
       _nameCtrl.text.trim().isNotEmpty &&
       !AppValidators.hasEmoji(_nameCtrl.text);
-
-  bool get _storeNameValid =>
+  bool get _storeNameValid      =>
       _storeNameCtrl.text.trim().isNotEmpty &&
       !AppValidators.hasEmoji(_storeNameCtrl.text);
 
   bool get _isValid =>
       _nameValid &&
       _emailValid &&
-      _passwordLengthValid &&
+      _passwordValid &&
       _passwordsMatch &&
       _storeNameValid &&
       _acceptedTerms;
@@ -103,7 +99,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final isSigningUp = authState?.isSigningUp ?? false;
     final signUpError = authState?.signUpError;
 
-    // Show error snackbar
     ref.listen(authProvider, (prev, next) {
       final error = next.value?.signUpError;
       if (error != null && error != prev?.value?.signUpError) {
@@ -120,7 +115,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       }
     });
 
-    // Navigate after successful sign up
     ref.listen(authProvider, (prev, next) {
       if (next.value?.isAuthenticated == true &&
           prev?.value?.isAuthenticated == false) {
@@ -189,7 +183,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         'Datos Personales', Icons.person_outline_rounded),
                     const SizedBox(height: 10),
 
-                    // FIX: campo nombre con formatter anti-emoji
                     _formField(
                       label: 'Nombre completo',
                       ctrl: _nameCtrl,
@@ -199,8 +192,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       textCapitalization: TextCapitalization.words,
                       inputFormatters: [_noEmojiFormatter],
                     ),
-
-                    // FIX: mostrar error si nombre tiene emoji
                     if (_nameCtrl.text.isNotEmpty &&
                         AppValidators.hasEmoji(_nameCtrl.text)) ...[
                       const SizedBox(height: 4),
@@ -208,7 +199,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     ],
                     const SizedBox(height: 12),
 
-                    // FIX: campo email con formatter (sin espacios, sin emojis)
                     _formField(
                       label: 'Correo electrónico',
                       ctrl: _emailCtrl,
@@ -218,8 +208,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       keyboardType: TextInputType.emailAddress,
                       inputFormatters: [_emailFormatter],
                     ),
-
-                    // FIX: error inline de email con formato inválido
                     if (_emailCtrl.text.isNotEmpty && !_emailValid) ...[
                       const SizedBox(height: 4),
                       _fieldError('Ingresa un correo válido (ej: tu@correo.com)'),
@@ -243,7 +231,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // FIX: campo tienda con formatter anti-emoji
                     _formField(
                       label: 'Nombre de la tienda *',
                       ctrl: _storeNameCtrl,
@@ -408,11 +395,219 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     );
   }
 
-  /// Mensaje de error inline debajo de un campo.
   Widget _fieldError(String message) {
-    return Text(
-      message,
-      style: AppTypography.caption2.copyWith(color: AppColors.error),
+    return Row(
+      children: [
+        const Icon(Icons.cancel_outlined, size: 13, color: AppColors.error),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            message,
+            style: AppTypography.caption2.copyWith(color: AppColors.error),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Campo de contraseña con panel de reglas ───
+
+  Widget _passwordField(bool isDark) {
+    final password = _passCtrl.text;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Contraseña',
+            style: AppTypography.caption
+                .copyWith(color: AppColors.textSecondary)),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? AppColors.darkSurfaceSecondary
+                : AppColors.surfaceSecondary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(children: [
+            const Padding(
+              padding: EdgeInsets.only(left: 14),
+              child: Icon(Icons.lock_outline_rounded,
+                  color: AppColors.textTertiary, size: 18),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _passCtrl,
+                obscureText: !_showPassword,
+                onChanged: (_) => setState(() {}),
+                onTap: () => setState(() => _showPasswordRules = true),
+                decoration: const InputDecoration(
+                  hintText: 'Crea una contraseña segura',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () =>
+                  setState(() => _showPassword = !_showPassword),
+              icon: Icon(
+                _showPassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: AppColors.textTertiary,
+                size: 18,
+              ),
+            ),
+          ]),
+        ),
+
+        // ── Panel de reglas de contraseña ──────────
+        // Se muestra al tocar el campo y permanece hasta que la contraseña sea válida.
+        if (_showPasswordRules || (password.isNotEmpty && !_passwordValid)) ...[
+          const SizedBox(height: 8),
+          _passwordRulesPanel(password, isDark),
+        ],
+      ],
+    );
+  }
+
+  /// Panel visual que muestra cada regla de contraseña con estado ✓ / ✗.
+  Widget _passwordRulesPanel(String password, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppColors.darkSurfaceSecondary.withValues(alpha: 0.7)
+            : AppColors.surfaceSecondary,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.textTertiary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.info_outline_rounded,
+                size: 13, color: AppColors.textTertiary),
+            const SizedBox(width: 4),
+            Text(
+              'Requisitos de la contraseña',
+              style: AppTypography.caption2.copyWith(
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          ...AppValidators.passwordRules.map((rule) {
+            final ok = password.isNotEmpty && rule.check(password);
+            final pending = password.isEmpty;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(
+                children: [
+                  Icon(
+                    ok
+                        ? Icons.check_circle_rounded
+                        : pending
+                            ? Icons.radio_button_unchecked_rounded
+                            : Icons.cancel_rounded,
+                    size: 14,
+                    color: ok
+                        ? AppColors.success
+                        : pending
+                            ? AppColors.textTertiary
+                            : AppColors.error,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      rule.label,
+                      style: AppTypography.caption2.copyWith(
+                        color: ok
+                            ? AppColors.success
+                            : pending
+                                ? AppColors.textTertiary
+                                : AppColors.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 4),
+          Text(
+            'Caracteres especiales permitidos: ! @ # \$ % ^ & * ( ) _ + - = [ ] { } | ; : \' " , . / < > ?',
+            style: AppTypography.caption2.copyWith(
+              color: AppColors.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _confirmPasswordField(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Confirmar contraseña',
+            style: AppTypography.caption
+                .copyWith(color: AppColors.textSecondary)),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? AppColors.darkSurfaceSecondary
+                : AppColors.surfaceSecondary,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(children: [
+            const Padding(
+              padding: EdgeInsets.only(left: 14),
+              child: Icon(Icons.lock_rounded,
+                  color: AppColors.textTertiary, size: 18),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _confirmPassCtrl,
+                obscureText: !_showConfirmPassword,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  hintText: 'Repite tu contraseña',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () => setState(
+                  () => _showConfirmPassword = !_showConfirmPassword),
+              icon: Icon(
+                _showConfirmPassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: AppColors.textTertiary,
+                size: 18,
+              ),
+            ),
+          ]),
+        ),
+        if (_confirmPassCtrl.text.isNotEmpty && !_passwordsMatch) ...[
+          const SizedBox(height: 4),
+          _fieldError('Las contraseñas no coinciden'),
+        ],
+      ],
     );
   }
 
@@ -424,7 +619,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     required bool isDark,
     TextInputType keyboardType = TextInputType.text,
     TextCapitalization textCapitalization = TextCapitalization.none,
-    List<TextInputFormatter>? inputFormatters, // FIX: parámetro añadido
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,7 +646,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 keyboardType: keyboardType,
                 textCapitalization: textCapitalization,
                 autocorrect: false,
-                inputFormatters: inputFormatters, // FIX: aplicado
+                inputFormatters: inputFormatters,
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   hintText: hint,
@@ -465,123 +660,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             ),
           ]),
         ),
-      ],
-    );
-  }
-
-  Widget _passwordField(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Contraseña',
-            style: AppTypography.caption
-                .copyWith(color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: isDark
-                ? AppColors.darkSurfaceSecondary
-                : AppColors.surfaceSecondary,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 14),
-              child: Icon(Icons.lock_outline_rounded,
-                  color: AppColors.textTertiary, size: 18),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _passCtrl,
-                obscureText: !_showPassword,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  hintText: 'Mínimo 8 caracteres',
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: () =>
-                  setState(() => _showPassword = !_showPassword),
-              icon: Icon(
-                _showPassword
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: AppColors.textTertiary,
-                size: 18,
-              ),
-            ),
-          ]),
-        ),
-        if (_passCtrl.text.isNotEmpty && !_passwordLengthValid) ...[
-          const SizedBox(height: 4),
-          _fieldError('Mínimo 8 caracteres'),
-        ],
-      ],
-    );
-  }
-
-  // FIX: el campo de confirmar contraseña ahora también tiene botón de ojo
-  Widget _confirmPasswordField(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Confirmar contraseña',
-            style: AppTypography.caption
-                .copyWith(color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: isDark
-                ? AppColors.darkSurfaceSecondary
-                : AppColors.surfaceSecondary,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 14),
-              child: Icon(Icons.lock_rounded,
-                  color: AppColors.textTertiary, size: 18),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _confirmPassCtrl,
-                obscureText: !_showConfirmPassword, // FIX: controlado
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  hintText: 'Repite tu contraseña',
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                ),
-              ),
-            ),
-            // FIX: botón de ojo añadido
-            IconButton(
-              onPressed: () => setState(
-                  () => _showConfirmPassword = !_showConfirmPassword),
-              icon: Icon(
-                _showConfirmPassword
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: AppColors.textTertiary,
-                size: 18,
-              ),
-            ),
-          ]),
-        ),
-        // FIX: sólo muestra error cuando ambos campos tienen contenido
-        if (_confirmPassCtrl.text.isNotEmpty && !_passwordsMatch) ...[
-          const SizedBox(height: 4),
-          _fieldError('Las contraseñas no coinciden'),
-        ],
       ],
     );
   }

@@ -1,1 +1,0 @@
- C:\\Users\\estiv\\Desktop\\2026-1\\Moviles\\Flutter\\Flutter\\.dart_tool\\flutter_build\\0a9ff9d0613495aeaa81ead2072ee3bb\\native_assets.json: 

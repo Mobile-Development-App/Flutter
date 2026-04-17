@@ -145,9 +145,18 @@ class ApiService {
   Future<dynamic> delete(String path) async {
     final uri = _buildUri(path);
     debugPrint('[API] DELETE $uri');
+    final sw  = Stopwatch()..start();
     final res = await http
         .delete(uri, headers: _headers)
         .timeout(const Duration(seconds: 15));
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage:       PipelineStage.ingestion,
+      operation:   'DELETE $path',
+      recordCount: 0,
+      latency:     sw.elapsed,
+    );
+    debugPrint('[API] DELETE completed — status ${res.statusCode} in ${sw.elapsedMilliseconds}ms');
     return _handle(res);
   }
 

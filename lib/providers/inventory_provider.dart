@@ -340,12 +340,21 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
   }
 
   Future<void> deleteProduct(Product product) async {
-    try {
-      await _api.delete('$kProducts/${product.id}');
-      debugPrint('[Inventory] ✅ deleteProduct synced to backend');
-    } catch (e) {
-      debugPrint('[Inventory] ⚠️  deleteProduct API failed, deleting locally: $e');
+    // Guard: a product with an empty id cannot be deleted on the backend.
+    if (product.id.isEmpty) {
+      debugPrint('[Inventory] ❌ deleteProduct — product.id is empty, aborting');
+      throw Exception('El producto no tiene un ID válido y no puede eliminarse del servidor.');
     }
+
+    debugPrint('[Inventory] DELETE $kProducts/${product.id}');
+
+    // Call the backend FIRST. If it fails, the exception propagates to the
+    // caller so the UI can show an error and the local list stays intact.
+    await _api.delete('$kProducts/${product.id}');
+
+    debugPrint('[Inventory] ✅ deleteProduct synced to backend — removing from local state');
+
+    // Only reach here when the backend confirmed the deletion.
     final s = state.value!;
     final updated = s.products.where((p) => p.id != product.id).toList();
     _update((_) => s.copyWith(

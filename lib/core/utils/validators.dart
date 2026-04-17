@@ -5,38 +5,38 @@ final _emailRegex = RegExp(
 
 /// Detecta emojis y símbolos gráficos — rango amplio para Unicode 15+
 final _emojiRegex = RegExp(
-  r'[\u{1F000}-\u{1FFFF}]'   // Supplementary Multilingual Plane (emojis principales)
-  r'|[\u{2600}-\u{27BF}]'    // Misc Symbols, Dingbats
-  r'|[\u{FE00}-\u{FE0F}]'    // Variation Selectors (modificadores de emoji)
-  r'|[\u{1F900}-\u{1FAFF}]'  // Supplemental Symbols & Pictographs
-  r'|\u{200D}'               // Zero-Width Joiner (combina emojis de familia)
-  r'|\u{20E3}',              // Combining Enclosing Keycap
+  r'[\u{1F000}-\u{1FFFF}]'
+  r'|[\u{2600}-\u{27BF}]'
+  r'|[\u{FE00}-\u{FE0F}]'
+  r'|[\u{1F900}-\u{1FAFF}]'
+  r'|\u{200D}'
+  r'|\u{20E3}',
   unicode: true,
 );
+
+/// Regla individual de contraseña con descripción e indicador de estado.
+class PasswordRule {
+  final String label;
+  final bool Function(String) check;
+  const PasswordRule({required this.label, required this.check});
+}
 
 abstract final class AppValidators {
   // ── Email ────────────────────────────────────
 
-  /// Valida que el correo:
-  ///  • No esté vacío
-  ///  • No contenga espacios (ni al inicio, ni en medio, ni al final)
-  ///  • Tenga formato real: local@dominio.tld
-  ///  • No contenga emojis
   static bool isValidEmail(String email) {
     if (email.isEmpty) return false;
-    if (email.contains(' ')) return false;          // espacio en cualquier pos.
-    if (hasEmoji(email)) return false;              // emojis
+    if (email.contains(' ')) return false;
+    if (hasEmoji(email)) return false;
     return _emailRegex.hasMatch(email.trim());
   }
 
   // ── Emojis ───────────────────────────────────
 
-  /// Devuelve true si el texto contiene al menos un emoji o símbolo gráfico.
   static bool hasEmoji(String text) => _emojiRegex.hasMatch(text);
 
   // ── Nombre / texto libre ──────────────────────
 
-  /// Nombre válido: no vacío (tras trim) y sin emojis.
   static bool isValidName(String name) {
     final t = name.trim();
     return t.isNotEmpty && !hasEmoji(t);
@@ -44,10 +44,67 @@ abstract final class AppValidators {
 
   // ── Contraseña ───────────────────────────────
 
-  /// Mínimo 8 caracteres (la contraseña nunca se trim-ea).
-  static bool isValidPassword(String password) => password.length >= 8;
+  /// Lista de reglas individuales para mostrar en la UI.
+  ///
+  /// Caracteres especiales permitidos: ! @ # $ % ^ & * ( ) _ + - = [ ] { } | ; : ' " , . / < > ?
+  static final List<PasswordRule> passwordRules = [
+    PasswordRule(
+      label: 'Mínimo 8 caracteres',
+      check: (p) => p.length >= 8,
+    ),
+    PasswordRule(
+      label: 'Al menos una letra mayúscula (A–Z)',
+      check: (p) => RegExp(r'[A-Z]').hasMatch(p),
+    ),
+    PasswordRule(
+      label: 'Al menos una letra minúscula (a–z)',
+      check: (p) => RegExp(r'[a-z]').hasMatch(p),
+    ),
+    PasswordRule(
+      label: 'Al menos un número (0–9)',
+      check: (p) => RegExp(r'[0-9]').hasMatch(p),
+    ),
+    PasswordRule(
+      label: 'Sin espacios en blanco',
+      check: (p) => !p.contains(' '),
+    ),
+    PasswordRule(
+      label: 'Sin emojis ni símbolos gráficos',
+      check: (p) => !hasEmoji(p),
+    ),
+  ];
 
-  /// Las dos contraseñas coinciden Y tienen longitud mínima.
+  /// Contraseña válida: cumple TODAS las reglas de [passwordRules].
+  static bool isValidPassword(String password) =>
+      passwordRules.every((r) => r.check(password));
+
+  /// Las dos contraseñas coinciden Y la contraseña es válida.
   static bool passwordsMatch(String pass, String confirm) =>
       pass == confirm && isValidPassword(pass);
+
+  // ── Números para productos ───────────────────
+
+  /// Entero estrictamente positivo (> 0). Solo dígitos, sin decimales.
+  /// Uso: cantidad en stock.
+  static bool isPositiveInteger(String value) {
+    if (value.trim().isEmpty) return false;
+    final n = int.tryParse(value.trim());
+    return n != null && n > 0;
+  }
+
+  /// Entero no-negativo (>= 0). Permite 0 como umbral sin límite inferior.
+  /// Uso: stock mínimo.
+  static bool isNonNegativeInteger(String value) {
+    if (value.trim().isEmpty) return false;
+    final n = int.tryParse(value.trim());
+    return n != null && n >= 0;
+  }
+
+  /// Número decimal estrictamente positivo (> 0). Con hasta 2 decimales.
+  /// Uso: precio de costo, precio de venta.
+  static bool isPositivePrice(String value) {
+    if (value.trim().isEmpty) return false;
+    final n = double.tryParse(value.trim());
+    return n != null && n > 0;
+  }
 }

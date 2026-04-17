@@ -1,16 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../core/utils/validators.dart';
 import '../../services/api_service.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
-// Sprint 3 — BQ7: track entry method (barcode vs manual) for accuracy analysis
 import '../../services/usage_tracking_service.dart';
+
+/// Formatter que permite solo dígitos enteros (sin decimales).
+final _integerOnlyFormatter = FilteringTextInputFormatter.allow(
+  RegExp(r'[0-9]'),
+);
+
+/// Formatter que permite dígitos y un punto decimal (para precios).
+class _DecimalInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text;
+    // Permite vacío
+    if (text.isEmpty) return newValue;
+    // Solo dígitos y un punto decimal
+    if (!RegExp(r'^\d*\.?\d{0,2}$').hasMatch(text)) return oldValue;
+    return newValue;
+  }
+}
 
 class AddProductScreen extends ConsumerStatefulWidget {
   final Product? editingProduct;
@@ -23,25 +45,36 @@ class AddProductScreen extends ConsumerStatefulWidget {
 }
 
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
-  final _nameCtrl = TextEditingController();
-  final _skuCtrl = TextEditingController();
-  final _barcodeCtrl = TextEditingController();
+  final _nameCtrl     = TextEditingController();
+  final _skuCtrl      = TextEditingController();
+  final _barcodeCtrl  = TextEditingController();
   final _supplierCtrl = TextEditingController();
-  final _costCtrl = TextEditingController();
-  final _saleCtrl = TextEditingController();
-  final _qtyCtrl = TextEditingController();
+  final _costCtrl     = TextEditingController();
+  final _saleCtrl     = TextEditingController();
+  final _qtyCtrl      = TextEditingController();
   final _minStockCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
+  final _descCtrl     = TextEditingController();
   final _imageUrlCtrl = TextEditingController();
 
-  ProductCategory _category = ProductCategory.other;
+  ProductCategory _category    = ProductCategory.other;
   DateTime? _expirationDate;
   bool _hasExpiration = false;
-  bool _showSuccess = false;
-  bool _imageError = false;
+  bool _showSuccess   = false;
+  bool _imageError    = false;
 
   bool get _isEditing => widget.editingProduct != null;
+
+  // ── Validaciones de campos numéricos ──────────
+
+  /// Precio de costo: número positivo (> 0).
+  bool get _costValid     => AppValidators.isPositivePrice(_costCtrl.text);
+  /// Precio de venta: número positivo (> 0).
+  bool get _saleValid     => AppValidators.isPositivePrice(_saleCtrl.text);
+  /// Cantidad: entero estrictamente positivo (> 0).
+  bool get _qtyValid      => AppValidators.isPositiveInteger(_qtyCtrl.text);
+  /// Stock mínimo: entero no-negativo (>= 0).
+  bool get _minStockValid => AppValidators.isNonNegativeInteger(_minStockCtrl.text);
 
   double get _calculatedMargin {
     final cost = double.tryParse(_costCtrl.text) ?? 0;
@@ -59,9 +92,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   bool get _isFormValid =>
       _nameCtrl.text.isNotEmpty &&
       _skuCtrl.text.isNotEmpty &&
-      _costCtrl.text.isNotEmpty &&
-      _saleCtrl.text.isNotEmpty &&
-      _qtyCtrl.text.isNotEmpty;
+      _costValid &&
+      _saleValid &&
+      _qtyValid &&
+      _minStockValid;
 
   String? get _imageUrl {
     final url = _imageUrlCtrl.text.trim();
@@ -81,17 +115,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   @override
   void dispose() {
     for (final c in [
-      _nameCtrl,
-      _skuCtrl,
-      _barcodeCtrl,
-      _supplierCtrl,
-      _costCtrl,
-      _saleCtrl,
-      _qtyCtrl,
-      _minStockCtrl,
-      _locationCtrl,
-      _descCtrl,
-      _imageUrlCtrl,
+      _nameCtrl, _skuCtrl, _barcodeCtrl, _supplierCtrl,
+      _costCtrl, _saleCtrl, _qtyCtrl, _minStockCtrl,
+      _locationCtrl, _descCtrl, _imageUrlCtrl,
     ]) {
       c.dispose();
     }
@@ -99,29 +125,29 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 
   void _populate(Product p) {
-    _nameCtrl.text = p.name;
-    _skuCtrl.text = p.sku;
-    _barcodeCtrl.text = p.barcode;
-    _supplierCtrl.text = p.supplier;
-    _costCtrl.text = p.costPrice.toStringAsFixed(0);
-    _saleCtrl.text = p.salePrice.toStringAsFixed(0);
-    _qtyCtrl.text = '${p.quantity}';
-    _minStockCtrl.text = '${p.minStock}';
-    _locationCtrl.text = p.location;
-    _descCtrl.text = p.description;
-    _imageUrlCtrl.text = p.imageURL ?? '';
-    _category = p.category;
+    _nameCtrl.text      = p.name;
+    _skuCtrl.text       = p.sku;
+    _barcodeCtrl.text   = p.barcode;
+    _supplierCtrl.text  = p.supplier;
+    _costCtrl.text      = p.costPrice.toStringAsFixed(2);
+    _saleCtrl.text      = p.salePrice.toStringAsFixed(2);
+    _qtyCtrl.text       = '${p.quantity}';
+    _minStockCtrl.text  = '${p.minStock}';
+    _locationCtrl.text  = p.location;
+    _descCtrl.text      = p.description;
+    _imageUrlCtrl.text  = p.imageURL ?? '';
+    _category           = p.category;
     if (p.expirationDate != null) {
-      _hasExpiration = true;
+      _hasExpiration  = true;
       _expirationDate = p.expirationDate;
     }
   }
 
   void _populateFromScan(ScannedProductResult scan) {
-    _nameCtrl.text = scan.name;
+    _nameCtrl.text   = scan.name;
     _barcodeCtrl.text = scan.barcode;
-    _category = scan.category;
-    _saleCtrl.text = scan.suggestedPrice.toStringAsFixed(0);
+    _category        = scan.category;
+    _saleCtrl.text   = scan.suggestedPrice.toStringAsFixed(2);
   }
 
   @override
@@ -213,51 +239,48 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             title: 'Información Básica',
             icon: Icons.info_outline_rounded,
             children: [
-              _field(
-                'Nombre del producto',
-                _nameCtrl,
-                'Ej: Leche Entera 1L',
-                isDark,
-              ),
-              _field(
-                'SKU',
-                _skuCtrl,
-                'Ej: DAI-001',
-                isDark,
-              ),
+              _field('Nombre del producto', _nameCtrl, 'Ej: Leche Entera 1L', isDark),
+              _field('SKU', _skuCtrl, 'Ej: DAI-001', isDark),
               _field(
                 'Código de barras',
                 _barcodeCtrl,
                 'Ej: 7701234567890',
                 isDark,
                 keyboardType: TextInputType.number,
+                inputFormatters: [_integerOnlyFormatter],
               ),
               _categoryPicker(isDark),
-              _field(
-                'Proveedor',
-                _supplierCtrl,
-                'Ej: Lácteos Alpina',
-                isDark,
-              ),
+              _field('Proveedor', _supplierCtrl, 'Ej: Lácteos Alpina', isDark),
             ],
           ),
           const SizedBox(height: 16),
 
+          // ── Precios ──────────────────────────────
           _section(
             title: 'Precios',
             icon: Icons.monetization_on_outlined,
             children: [
+              // Regla informativa visible
+              _numericRulesBanner(
+                icon: Icons.info_outline_rounded,
+                message:
+                    'Solo se permiten valores numéricos positivos (mayores a 0). '
+                    'Se aceptan hasta 2 decimales separados por punto (ej: 1500.50).',
+              ),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: _field(
                       'Precio de costo',
                       _costCtrl,
-                      '0',
+                      'Ej: 800.00',
                       isDark,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [_DecimalInputFormatter()],
+                      errorText: _costCtrl.text.isNotEmpty && !_costValid
+                          ? 'Ingresa un valor mayor a 0'
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -265,15 +288,24 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     child: _field(
                       'Precio de venta',
                       _saleCtrl,
-                      '0',
+                      'Ej: 1200.00',
                       isDark,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [_DecimalInputFormatter()],
+                      errorText: _saleCtrl.text.isNotEmpty && !_saleValid
+                          ? 'Ingresa un valor mayor a 0'
+                          : null,
                     ),
                   ),
                 ],
               ),
+              // Advertencia si precio de venta es menor que el de costo
+              if (_costValid && _saleValid &&
+                  (double.tryParse(_saleCtrl.text) ?? 0) <
+                      (double.tryParse(_costCtrl.text) ?? 0))
+                _warningBanner(
+                  'El precio de venta es menor al costo. Verifica los valores.',
+                ),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -282,11 +314,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.percent_rounded,
-                      color: _marginColor,
-                      size: 16,
-                    ),
+                    Icon(Icons.percent_rounded, color: _marginColor, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       'Margen de ganancia:',
@@ -309,19 +337,33 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           ),
           const SizedBox(height: 16),
 
+          // ── Inventario ───────────────────────────
           _section(
             title: 'Inventario',
             icon: Icons.inventory_outlined,
             children: [
+              // Regla informativa visible
+              _numericRulesBanner(
+                icon: Icons.info_outline_rounded,
+                message:
+                    'Cantidad: entero positivo (mínimo 1). '
+                    'Stock mínimo: entero no-negativo (0 o más). '
+                    'No se aceptan decimales ni valores negativos.',
+              ),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: _field(
                       'Cantidad',
                       _qtyCtrl,
-                      '0',
+                      'Ej: 10',
                       isDark,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [_integerOnlyFormatter],
+                      errorText: _qtyCtrl.text.isNotEmpty && !_qtyValid
+                          ? 'Entero positivo (≥ 1)'
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -329,9 +371,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     child: _field(
                       'Stock mínimo',
                       _minStockCtrl,
-                      '0',
+                      'Ej: 3',
                       isDark,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [_integerOnlyFormatter],
+                      errorText: _minStockCtrl.text.isNotEmpty && !_minStockValid
+                          ? 'Entero no-negativo (≥ 0)'
+                          : null,
                     ),
                   ),
                 ],
@@ -370,9 +416,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       context: context,
                       initialDate: _expirationDate ?? DateTime.now(),
                       firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(
-                        const Duration(days: 3650),
-                      ),
+                      lastDate: DateTime.now().add(const Duration(days: 3650)),
                     );
                     if (picked != null) {
                       setState(() => _expirationDate = picked);
@@ -447,6 +491,68 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     );
   }
 
+  // ── Banners informativos ──────────────────────
+
+  /// Banner de reglas numéricas (azul informativo).
+  Widget _numericRulesBanner({required IconData icon, required String message}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.deepSpaceBlue.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.deepSpaceBlue.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: AppColors.deepSpaceBlue),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.caption2.copyWith(
+                color: AppColors.deepSpaceBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Banner de advertencia (amarillo).
+  Widget _warningBanner(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              size: 14, color: AppColors.warning),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.caption2.copyWith(
+                color: AppColors.warning,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Secciones e imagen ────────────────────────
+
   Widget _imageSection(bool isDark) {
     return AppCard(
       padding: const EdgeInsets.all(16),
@@ -455,19 +561,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.image_outlined,
-                size: 16,
-                color: AppColors.deepSpaceBlue,
-              ),
+              const Icon(Icons.image_outlined, size: 16, color: AppColors.deepSpaceBlue),
               const SizedBox(width: 6),
               Text('Imagen del Producto', style: AppTypography.headline),
               const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.textTertiary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
@@ -529,7 +628,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 
   Widget _imagePreview(bool isDark) {
-    final url = _imageUrl;
+    final url   = _imageUrl;
     final color = _categoryColor;
 
     return Container(
@@ -574,30 +673,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
   Color get _categoryColor {
     switch (_category) {
-      case ProductCategory.beverages:
-        return AppColors.freshSky;
-      case ProductCategory.dairy:
-        return AppColors.info;
-      case ProductCategory.snacks:
-        return AppColors.warning;
-      case ProductCategory.cleaning:
-        return AppColors.teaGreen;
-      case ProductCategory.personalCare:
-        return Colors.pink;
-      case ProductCategory.grains:
-        return Colors.brown;
-      case ProductCategory.fruits:
-        return AppColors.success;
-      case ProductCategory.meat:
-        return AppColors.error;
-      case ProductCategory.bakery:
-        return Colors.orange;
-      case ProductCategory.frozen:
-        return AppColors.freshSky;
-      case ProductCategory.condiments:
-        return Colors.red;
-      case ProductCategory.other:
-        return AppColors.textSecondary;
+      case ProductCategory.beverages:    return AppColors.freshSky;
+      case ProductCategory.dairy:        return AppColors.info;
+      case ProductCategory.snacks:       return AppColors.warning;
+      case ProductCategory.cleaning:     return AppColors.teaGreen;
+      case ProductCategory.personalCare: return Colors.pink;
+      case ProductCategory.grains:       return Colors.brown;
+      case ProductCategory.fruits:       return AppColors.success;
+      case ProductCategory.meat:         return AppColors.error;
+      case ProductCategory.bakery:       return Colors.orange;
+      case ProductCategory.frozen:       return AppColors.freshSky;
+      case ProductCategory.condiments:   return Colors.red;
+      case ProductCategory.other:        return AppColors.textSecondary;
     }
   }
 
@@ -610,11 +697,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.auto_awesome_rounded,
-            color: AppColors.deepSpaceBlue,
-            size: 18,
-          ),
+          const Icon(Icons.auto_awesome_rounded,
+              color: AppColors.deepSpaceBlue, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -671,22 +755,26 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     String hint,
     bool isDark, {
     TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
+    String? errorText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: AppTypography.caption.copyWith(
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 6),
         TextField(
           controller: ctrl,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(hintText: hint),
+          decoration: InputDecoration(
+            hintText: hint,
+            errorText: errorText,
+          ),
         ),
       ],
     );
@@ -698,9 +786,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       children: [
         Text(
           'Categoría',
-          style: AppTypography.caption.copyWith(
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 6),
         Container(
@@ -739,42 +825,47 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 
   void _save() {
+    // Doble guarda: el botón solo se habilita si _isFormValid,
+    // pero se verifica aquí también por seguridad.
+    if (!_isFormValid) return;
+
+    final cost     = double.parse(_costCtrl.text.trim());
+    final sale     = double.parse(_saleCtrl.text.trim());
+    final qty      = int.parse(_qtyCtrl.text.trim());
+    final minStock = int.parse(_minStockCtrl.text.trim());
+
     final product = Product(
       id: widget.editingProduct?.id ?? const Uuid().v4(),
-      name: _nameCtrl.text.trim(),
-      sku: _skuCtrl.text.trim(),
-      barcode: _barcodeCtrl.text.trim(),
-      category: _category,
-      supplier: _supplierCtrl.text.trim(),
-      costPrice: double.tryParse(_costCtrl.text) ?? 0,
-      salePrice: double.tryParse(_saleCtrl.text) ?? 0,
-      quantity: int.tryParse(_qtyCtrl.text) ?? 0,
-      minStock: int.tryParse(_minStockCtrl.text) ?? 0,
-      location: _locationCtrl.text.trim(),
+      name:      _nameCtrl.text.trim(),
+      sku:       _skuCtrl.text.trim(),
+      barcode:   _barcodeCtrl.text.trim(),
+      category:  _category,
+      supplier:  _supplierCtrl.text.trim(),
+      costPrice: cost,
+      salePrice: sale,
+      quantity:  qty,
+      minStock:  minStock,
+      location:  _locationCtrl.text.trim(),
       expirationDate: _hasExpiration ? _expirationDate : null,
       description: _descCtrl.text.trim(),
-      imageURL: _imageUrl,
+      imageURL:    _imageUrl,
       lastUpdated: DateTime.now(),
-      isActive: true,
-      // Fallbacks: nuevos productos creados desde UI suelen venir sin IDs.
-      // El backend normalmente puede asociar usando estos strings.
-      storeId: widget.editingProduct?.storeId ?? ApiService.shared.storeId,
-      categoryId: widget.editingProduct?.categoryId ?? _category.label,
-      supplierId: widget.editingProduct?.supplierId ?? _supplierCtrl.text.trim(),
+      isActive:    true,
+      storeId:     widget.editingProduct?.storeId    ?? ApiService.shared.storeId,
+      categoryId:  widget.editingProduct?.categoryId ?? _category.label,
+      supplierId:  widget.editingProduct?.supplierId ?? _supplierCtrl.text.trim(),
     );
 
     if (_isEditing) {
       ref.read(inventoryProvider.notifier).updateProduct(product);
-      // BQ7 — una corrección manual marca el registro previo como inexacto
       UsageTrackingService.shared.markEntryInaccurate(product.id);
     } else {
       ref.read(inventoryProvider.notifier).addProduct(product);
-      // BQ7 — registra si el producto fue ingresado vía escaneo o manualmente
       final viaBarcode = widget.fromScan != null;
       UsageTrackingService.shared.trackProductEntry(
         productId: product.id,
         viaBarcode: viaBarcode,
-        isAccurate: true, // se asume preciso hasta que el usuario corrija
+        isAccurate: true,
       );
     }
 

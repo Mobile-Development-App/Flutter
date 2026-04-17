@@ -345,13 +345,62 @@ class ProductDetailScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         OutlinedButton(
-          onPressed: () {
-            ref.read(inventoryProvider.notifier).deleteProduct(product);
-            Navigator.pop(context);
-          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.error,
+            side: const BorderSide(color: AppColors.error),
+          ),
+          onPressed: () => _confirmDelete(context, ref),
           child: const Text('Eliminar Producto'),
         ),
       ],
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    // Ask for confirmation before deleting.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar producto'),
+        content: Text(
+          '¿Seguro que deseas eliminar "${product.name}"? Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      // Await the deletion — if the backend fails, an exception is thrown
+      // and the product is NOT removed from the local list.
+      await ref.read(inventoryProvider.notifier).deleteProduct(product);
+
+      // Only leave the detail screen after a successful deletion.
+      if (context.mounted) Navigator.pop(context);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo eliminar el producto. Verifica tu conexión e intenta de nuevo.\n'
+            'Detalle: $e',
+          ),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 }

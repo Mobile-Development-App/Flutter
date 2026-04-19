@@ -329,11 +329,14 @@ class _ScanScreenMobileState extends ConsumerState<ScanScreenMobile>
     const size = 24.0;
     const stroke = 3.0;
     const color = AppColors.teaGreen;
+    // El rect de overlay mide 260×260 px. Cada corner widget mide 24×24 px.
+    // Con alignment: center, el origen del widget está en center - 12 = 118 px
+    // del borde → el offset correcto es ±118 para que el trazo quede exacto.
     final positions = [
-      [-115.0, -115.0, true, true],
-      [115.0, -115.0, false, true],
-      [-115.0, 115.0, true, false],
-      [115.0, 115.0, false, false],
+      [-118.0, -118.0, true, true],
+      [118.0, -118.0, false, true],
+      [-118.0, 118.0, true, false],
+      [118.0, 118.0, false, false],
     ];
     return SizedBox(
       width: 260,

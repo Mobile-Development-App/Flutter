@@ -7,6 +7,8 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/persistence_service.dart';
 import '../core/utils/extensions.dart';
+import '../services/notification_service.dart';
+import 'settings_provider.dart';
 
 // ─────────────────────────────────────────────
 // StockFilter
@@ -315,18 +317,27 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
           dashboardStats: _buildStats(updated, s.orders, s.alerts)));
     }
     _logAudit('Producto Agregado', 'Product', product.id, product.name,
-        'SKU: ${product.sku}');
+        'SKU: \${product.sku}');
+
+    if (_notificationsEnabled) {
+      await _notif.showProductAdded(product.name);
+    }
   }
 
   Future<void> updateProduct(Product product) async {
+    // Capturamos el producto anterior ANTES de mutar el estado
+    final previous = state.value?.products
+        .where((p) => p.id == product.id)
+        .firstOrNull;
+
     try {
       final productToSend = product.storeId == null
           ? product.copyWith(storeId: _api.storeId)
           : product;
-      await _api.patch('$kProducts/${product.id}', productToSend.toBackendJson());
+      await _api.patch('\$kProducts/\${product.id}', productToSend.toBackendJson());
       debugPrint('[Inventory] ✅ updateProduct synced to backend');
     } catch (e) {
-      debugPrint('[Inventory] ⚠️  updateProduct API failed, updating locally: $e');
+      debugPrint('[Inventory] ⚠️  updateProduct API failed, updating locally: \$e');
     }
     final s = state.value!;
     final idx = s.products.indexWhere((p) => p.id == product.id);
@@ -337,6 +348,25 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
         products: updated, alerts: newAlerts,
         dashboardStats: _buildStats(updated, s.orders, newAlerts)));
     _logAudit('Producto Actualizado', 'Product', product.id, product.name, '');
+
+    // Notificar solo si algo relevante cambió
+    if (_notificationsEnabled && previous != null) {
+      final changes = _describeChanges(previous, product);
+      if (changes.isNotEmpty) {
+        await _notif.showProductUpdated(product.name, changes: changes);
+      }
+    }
+  }
+
+  /// Genera una descripción legible de los cambios entre dos versiones del producto.
+  String _describeChanges(Product before, Product after) {
+    final parts = <String>[];
+    if (before.quantity  != after.quantity)  parts.add('Cantidad: \${before.quantity} → \${after.quantity}');
+    if (before.salePrice != after.salePrice) parts.add('Precio: \${before.salePrice.toStringAsFixed(2)} → \${after.salePrice.toStringAsFixed(2)}');
+    if (before.costPrice != after.costPrice) parts.add('Costo: \${before.costPrice.toStringAsFixed(2)} → \${after.costPrice.toStringAsFixed(2)}');
+    if (before.minStock  != after.minStock)  parts.add('Stock mín: \${before.minStock} → \${after.minStock}');
+    if (before.name      != after.name)      parts.add('Nombre: "\${before.name}" → "\${after.name}"');
+    return parts.join(' · ');
   }
 
   Future<void> deleteProduct(Product product) async {
@@ -362,6 +392,10 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
         dashboardStats: _buildStats(updated, s.orders, s.alerts)));
     await HapticManager.success();
     _logAudit('Producto Eliminado', 'Product', product.id, product.name, '');
+
+    if (_notificationsEnabled) {
+      await _notif.showProductDeleted(product.name);
+    }
   }
 
   Future<void> recordSale(String productId, int quantity) async {
@@ -409,7 +443,11 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
         dashboardStats: _buildStats(updated, s.orders, s.alerts)));
     await HapticManager.success();
     _logAudit('Reabastecimiento', 'Product', productId, product.name,
-        'Cantidad: +$quantity');
+        'Cantidad: +\$quantity');
+
+    if (_notificationsEnabled) {
+      await _notif.showRestock(product.name, quantity);
+    }
   }
 
   // ── Alerts ────────────────────────────────
@@ -448,6 +486,19 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
 
   // ── Private ───────────────────────────────
 
+  // ── Notification helper ──────────────────
+  // Lee el flag del settingsProvider antes de enviar cualquier notificación.
+  // Esto evita acoplar lógica de UI a cada método CRUD.
+  bool get _notificationsEnabled {
+    try {
+      return ref.read(settingsProvider).value?.notificationsEnabled ?? true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  NotificationService get _notif => NotificationService.shared;
+
   void _update(InventoryState Function(InventoryState) fn) {
     final current = state.value;
     if (current != null) state = AsyncData(fn(current));
@@ -485,20 +536,67 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
       }
     }
 
+    // ── Stock bajo ────────────────────────────
     if (product.stockStatus == StockStatus.lowStock) {
-      addIfMissing(AlertType.lowStock, 'Stock Bajo',
-          '${product.name} tiene solo ${product.quantity} uds (mín: ${product.minStock})',
-          AlertPriority.high);
+      final isNew = !alerts.any(
+          (a) => a.productId == product.id && a.type == AlertType.lowStock && !a.isRead);
+      addIfMissing(
+        AlertType.lowStock,
+        'Stock Bajo',
+        '\${product.name} tiene solo \${product.quantity} uds (mín: \${product.minStock})',
+        AlertPriority.high,
+      );
+      if (isNew && _notificationsEnabled) {
+        _notif.showInventoryAlert(
+          title: '⚠️ Stock Bajo',
+          body: '\${product.name} tiene solo \${product.quantity} uds (mín: \${product.minStock})',
+          productId: product.id,
+          kind: AlertKind.lowStock,
+        );
+      }
     }
+
+    // ── Agotado ───────────────────────────────
     if (product.stockStatus == StockStatus.outOfStock) {
-      addIfMissing(AlertType.outOfStock, 'Producto Agotado',
-          '${product.name} se ha agotado completamente', AlertPriority.high);
+      final isNew = !alerts.any(
+          (a) => a.productId == product.id && a.type == AlertType.outOfStock && !a.isRead);
+      addIfMissing(
+        AlertType.outOfStock,
+        'Producto Agotado',
+        '\${product.name} se ha agotado completamente',
+        AlertPriority.high,
+      );
+      if (isNew && _notificationsEnabled) {
+        _notif.showInventoryAlert(
+          title: '🚫 Producto Agotado',
+          body: '\${product.name} se ha agotado completamente',
+          productId: product.id,
+          kind: AlertKind.outOfStock,
+        );
+      }
     }
+
+    // ── Por vencer ────────────────────────────
     if (product.isExpiringSoon) {
       final daysLeft = product.expirationDate!.difference(DateTime.now()).inDays;
-      addIfMissing(AlertType.expiringSoon, 'Por Vencer',
-          '${product.name} vence en $daysLeft días', AlertPriority.medium);
+      final isNew = !alerts.any(
+          (a) => a.productId == product.id && a.type == AlertType.expiringSoon && !a.isRead);
+      addIfMissing(
+        AlertType.expiringSoon,
+        'Por Vencer',
+        '\${product.name} vence en \$daysLeft días',
+        AlertPriority.medium,
+      );
+      if (isNew && _notificationsEnabled) {
+        _notif.showInventoryAlert(
+          title: '⏰ Producto Por Vencer',
+          body: '\${product.name} vence en \$daysLeft días',
+          productId: product.id,
+          kind: AlertKind.expiringSoon,
+        );
+      }
     }
+
     return alerts;
   }
 

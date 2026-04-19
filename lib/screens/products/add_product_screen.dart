@@ -239,8 +239,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             title: 'Información Básica',
             icon: Icons.info_outline_rounded,
             children: [
-              _field('Nombre del producto', _nameCtrl, 'Ej: Leche Entera 1L', isDark),
-              _field('SKU', _skuCtrl, 'Ej: DAI-001', isDark),
+              _field('Nombre del producto', _nameCtrl, 'Ej: Leche Entera 1L', isDark, isRequired: true),
+              _field('SKU', _skuCtrl, 'Ej: DAI-001', isDark, isRequired: true),
               _field(
                 'Código de barras',
                 _barcodeCtrl,
@@ -276,6 +276,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       _costCtrl,
                       'Ej: 800.00',
                       isDark,
+                      isRequired: true,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [_DecimalInputFormatter()],
                       errorText: _costCtrl.text.isNotEmpty && !_costValid
@@ -290,6 +291,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       _saleCtrl,
                       'Ej: 1200.00',
                       isDark,
+                      isRequired: true,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [_DecimalInputFormatter()],
                       errorText: _saleCtrl.text.isNotEmpty && !_saleValid
@@ -359,6 +361,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       _qtyCtrl,
                       'Ej: 10',
                       isDark,
+                      isRequired: true,
                       keyboardType: TextInputType.number,
                       inputFormatters: [_integerOnlyFormatter],
                       errorText: _qtyCtrl.text.isNotEmpty && !_qtyValid
@@ -373,6 +376,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       _minStockCtrl,
                       'Ej: 3',
                       isDark,
+                      isRequired: true,
                       keyboardType: TextInputType.number,
                       inputFormatters: [_integerOnlyFormatter],
                       errorText: _minStockCtrl.text.isNotEmpty && !_minStockValid
@@ -655,8 +659,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       );
               },
               errorBuilder: (_, __, ___) {
-                Future.microtask(() {
-                  if (mounted) setState(() => _imageError = true);
+                // Antipatrón corregido: no llamar setState durante build.
+                // addPostFrameCallback garantiza que el frame terminó.
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && !_imageError) setState(() => _imageError = true);
                 });
                 return _defaultIcon(color);
               },
@@ -754,6 +760,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     TextEditingController ctrl,
     String hint,
     bool isDark, {
+    bool isRequired = false,
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
     String? errorText,
@@ -761,9 +768,38 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+        Row(
+          children: [
+            Text(
+              label,
+              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+            ),
+            if (isRequired) ...[
+              const SizedBox(width: 3),
+              Text(
+                '*',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ] else ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.textTertiary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Opcional',
+                  style: AppTypography.caption2.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 6),
         TextField(

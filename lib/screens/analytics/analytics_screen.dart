@@ -23,6 +23,7 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
 
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   int _selectedRange = 0;
+  bool _analyticsTracked = false;
 
   static const List<String> _ranges = ['7d', '30d', '90d', '1a'];
 
@@ -99,17 +100,23 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           final stockBars = _buildStockBarData(products);
           final categorySections = _buildCategorySections(products);
 
-          // BQ8 — registra que el usuario accedió a las funciones analíticas
-          // Se ejecuta una vez por build cuando la data está disponible.
-          // Usando addPostFrameCallback para no mutar estado durante build.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            UsageTrackingService.shared.trackFeatureUsed('salesTrendChart');
-            UsageTrackingService.shared.trackFeatureUsed('stockBarChart');
-            UsageTrackingService.shared.trackFeatureUsed('categoryPieChart');
-          });
+          // BQ8 — registra UNA SOLA VEZ que el usuario accedió a analítica.
+          // El flag evita re-registrar el evento en cada rebuild del widget.
+          if (!_analyticsTracked) {
+            _analyticsTracked = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              UsageTrackingService.shared.trackFeatureUsed('salesTrendChart');
+              UsageTrackingService.shared.trackFeatureUsed('stockBarChart');
+              UsageTrackingService.shared.trackFeatureUsed('categoryPieChart');
+            });
+          }
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(10, 14, 10, 26),
+            padding: EdgeInsets.fromLTRB(
+              10, 14, 10,
+              MediaQuery.of(context).padding.bottom + 64 + 16,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -171,7 +178,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                           drawVerticalLine: false,
                           horizontalInterval: _horizontalStep(salesSpots),
                           getDrawingHorizontalLine: (_) => FlLine(
-                            color: Colors.grey.withOpacity(0.15),
+                            color: Colors.grey.withValues(alpha: 0.15),
                             strokeWidth: 1,
                           ),
                         ),
@@ -240,8 +247,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  const Color(0xFF083D68).withOpacity(0.18),
-                                  const Color(0xFF083D68).withOpacity(0.03),
+                                  const Color(0xFF083D68).withValues(alpha: 0.18),
+                                  const Color(0xFF083D68).withValues(alpha: 0.03),
                                 ],
                               ),
                             ),
@@ -642,9 +649,9 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.15)),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -715,7 +722,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.06),
+                  color: color.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -724,7 +731,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
+                        color: color.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
@@ -806,9 +813,9 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.16)),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

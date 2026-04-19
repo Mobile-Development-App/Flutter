@@ -25,8 +25,6 @@ class _RestockScreenState extends ConsumerState<RestockScreen>
   String get trackedScreenName => 'restock'; // BQ5
 
   final Map<String, TextEditingController> _qtyControllers = {};
-  bool _showPurchaseList = false;
-  List<_PurchaseItem> _purchaseItems = [];
 
   @override
   void dispose() {
@@ -46,8 +44,9 @@ class _RestockScreenState extends ConsumerState<RestockScreen>
     );
   }
 
-  void _generatePurchaseList(List<Product> products) {
-    _purchaseItems = products.map((p) {
+  void _generatePurchaseList(
+      BuildContext context, List<Product> products, bool isDark) {
+    final items = products.map((p) {
       final qty = int.tryParse(_ctrl(p).text) ?? 0;
       return _PurchaseItem(
         product: p,
@@ -55,7 +54,16 @@ class _RestockScreenState extends ConsumerState<RestockScreen>
         estimatedCost: p.costPrice * qty,
       );
     }).toList();
-    setState(() => _showPurchaseList = true);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,         // permite altura personalizada
+      enableDrag: true,                  // swipe hacia abajo para cerrar
+      isDismissible: true,               // tap en el scrim cierra el sheet
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PurchaseListSheet(items: items, isDark: isDark),
+    );
   }
 
   @override
@@ -75,7 +83,7 @@ class _RestockScreenState extends ConsumerState<RestockScreen>
             IconButton(
               icon: const Icon(Icons.assignment_rounded),
               onPressed: () =>
-                  _generatePurchaseList(restockNeeded),
+                  _generatePurchaseList(context, restockNeeded, isDark),
             ),
         ],
       ),
@@ -103,9 +111,7 @@ class _RestockScreenState extends ConsumerState<RestockScreen>
                 ],
               ),
             ),
-      bottomSheet: _showPurchaseList
-          ? _purchaseListSheet(context, isDark)
-          : null,
+
     );
   }
 
@@ -530,127 +536,194 @@ class _RestockScreenState extends ConsumerState<RestockScreen>
     );
   }
 
-  Widget _purchaseListSheet(
-      BuildContext context, bool isDark) {
-    final total = _purchaseItems.fold<double>(
-        0.0, (s, i) => s + i.estimatedCost);
-    final totalQty =
-        _purchaseItems.fold<int>(0, (s, i) => s + i.quantity);
+}
+
+// ─────────────────────────────────────────────
+// Data class
+// ─────────────────────────────────────────────
+class _PurchaseItem {
+  final Product product;
+  final int quantity;
+  final double estimatedCost;
+  const _PurchaseItem({
+    required this.product,
+    required this.quantity,
+    required this.estimatedCost,
+  });
+}
+
+// ─────────────────────────────────────────────
+// _PurchaseListSheet
+// Modal bottom sheet standalone — stateless,
+// se abre con showModalBottomSheet, se cierra
+// con swipe o con el botón / Navigator.pop.
+// ─────────────────────────────────────────────
+class _PurchaseListSheet extends StatelessWidget {
+  final List<_PurchaseItem> items;
+  final bool isDark;
+
+  const _PurchaseListSheet({
+    required this.items,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total    = items.fold<double>(0.0, (s, i) => s + i.estimatedCost);
+    final totalQty = items.fold<int>(0, (s, i) => s + i.quantity);
+    final bg = isDark ? AppColors.darkSurface : AppColors.surface;
+    final screenH = MediaQuery.of(context).size.height;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
+      // Máximo 80 % de pantalla; se ajusta si hay pocos ítems
+      constraints: BoxConstraints(maxHeight: screenH * 0.80),
       decoration: BoxDecoration(
-        color:
-            isDark ? AppColors.darkSurface : AppColors.surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 20,
-            offset: Offset(0, -4),
-          ),
-        ],
+        color: bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.textTertiary,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          // ── Drag handle ──────────────────────────
           Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Text('Lista de Compra',
-                    style: AppTypography.title),
-                const SizedBox(height: 4),
-                Text(total.currencyFormatted,
-                    style: AppTypography.headline.copyWith(
-                        color: AppColors.freshSky)),
-                Text(
-                    '${_purchaseItems.length} productos | $totalQty unidades',
-                    style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary)),
-              ],
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textTertiary.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16),
-              itemCount: _purchaseItems.length,
-              itemBuilder: (_, i) {
-                final item = _purchaseItems[i];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: AppCard(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Text(item.product.name,
-                                  style: AppTypography
-                                      .callout.copyWith(
-                                          fontWeight:
-                                              FontWeight.w500)),
-                              Text(item.product.supplier,
-                                  style:
-                                      AppTypography.caption2
-                                          .copyWith(
-                                              color: AppColors
-                                                  .textSecondary)),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.end,
-                          children: [
-                            Text('${item.quantity} uds',
-                                style: AppTypography.callout
-                                    .copyWith(
-                                        fontWeight:
-                                            FontWeight.w600)),
-                            Text(
-                                item.estimatedCost
-                                    .currencyFormatted,
-                                style:
-                                    AppTypography.caption2
-                                        .copyWith(
-                                            color: AppColors
-                                                .textSecondary)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+
+          // ── Header ───────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
             child: Row(
               children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.deepSpaceBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.assignment_rounded,
+                    size: 20,
+                    color: AppColors.deepSpaceBlue,
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        setState(() => _showPurchaseList = false),
-                    style: secondaryButtonStyle,
-                    child: const Text('Cerrar'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Lista de Compra', style: AppTypography.headline),
+                      Text(
+                        '${items.length} productos · $totalQty unidades',
+                        style: AppTypography.caption2
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                // Botón X para cerrar
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                  color: AppColors.textSecondary,
+                  style: IconButton.styleFrom(
+                    backgroundColor:
+                        AppColors.textTertiary.withValues(alpha: 0.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ],
+            ),
+          ),
+
+          // ── Total destacado ───────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.deepSpaceBlue, Color(0xFF0A4F84)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.payments_rounded,
+                      color: AppColors.teaGreen, size: 22),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Costo total estimado',
+                        style: AppTypography.caption2
+                            .copyWith(color: Colors.white60),
+                      ),
+                      Text(
+                        total.currencyFormatted,
+                        style: AppTypography.title3.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const Divider(height: 1, indent: 20, endIndent: 20),
+
+          // ── Lista scrollable ──────────────────────
+          Flexible(
+            child: items.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text(
+                      'No hay productos para mostrar.',
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    itemCount: items.length,
+                    itemBuilder: (_, i) => _ItemRow(
+                      item: items[i],
+                      isDark: isDark,
+                      isLast: i == items.length - 1,
+                    ),
+                  ),
+          ),
+
+          // ── Footer con botón cerrar ───────────────
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.check_rounded, size: 18),
+                  label: const Text('Listo'),
+                  style: primaryButtonStyle,
+                ),
+              ),
             ),
           ),
         ],
@@ -659,12 +732,112 @@ class _RestockScreenState extends ConsumerState<RestockScreen>
   }
 }
 
-class _PurchaseItem {
-  final Product product;
-  final int quantity;
-  final double estimatedCost;
-  const _PurchaseItem(
-      {required this.product,
-      required this.quantity,
-      required this.estimatedCost});
+// ─────────────────────────────────────────────
+// _ItemRow — cada producto en la lista de compra
+// ─────────────────────────────────────────────
+class _ItemRow extends StatelessWidget {
+  final _PurchaseItem item;
+  final bool isDark;
+  final bool isLast;
+
+  const _ItemRow({
+    required this.item,
+    required this.isDark,
+    required this.isLast,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final priorityColor = item.product.stockStatus == StockStatus.outOfStock
+        ? AppColors.error
+        : AppColors.warning;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurfaceSecondary : AppColors.surfaceSecondary,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: priorityColor.withValues(alpha: 0.12),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Ícono de categoría
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: priorityColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                item.product.category.icon,
+                size: 18,
+                color: priorityColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Nombre y proveedor
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.product.name,
+                    style: AppTypography.callout
+                        .copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.product.supplier.isEmpty
+                        ? item.product.sku
+                        : item.product.supplier,
+                    style: AppTypography.caption2
+                        .copyWith(color: AppColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Cantidad y costo
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: priorityColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${item.quantity} uds',
+                    style: AppTypography.caption.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: priorityColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.estimatedCost.currencyFormatted,
+                  style: AppTypography.caption2
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

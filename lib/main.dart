@@ -11,6 +11,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/main/main_tab_view.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'services/usage_tracking_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,10 @@ void main() async {
 
   // Estrategia de almacenamiento local (Hive) — Sprint 3.
   await UsageTrackingService.shared.init();
+
+  // Inicializar notificaciones locales (canales Android + config iOS).
+  // El permiso real se pide cuando el usuario activa el toggle en Ajustes.
+  await NotificationService.shared.init();
 
   runApp(
     const ProviderScope(

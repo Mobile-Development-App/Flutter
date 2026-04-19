@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/utils/extensions.dart';
+import '../services/notification_service.dart';
 
 // ─────────────────────────────────────────────
 // State
@@ -83,9 +85,25 @@ class SettingsNotifier extends AsyncNotifier<SettingsState> {
   Future<void> toggleNotifications() async {
     final prefs = await SharedPreferences.getInstance();
     final next = !(state.value?.notificationsEnabled ?? true);
+
+    if (next) {
+      // El usuario ACTIVA notificaciones:
+      // 1. Solicitar permiso al SO (iOS / Android 13+)
+      final granted = await NotificationService.shared.requestPermission();
+      if (!granted) {
+        // Si el usuario deniega el permiso, no cambiamos el toggle
+        debugPrint('[Settings] Notification permission denied by user');
+        return;
+      }
+    } else {
+      // El usuario DESACTIVA: cancelar todas las notificaciones pendientes
+      await NotificationService.shared.cancelAll();
+    }
+
     await prefs.setBool(_notificationsKey, next);
     await HapticManager.impact();
     _update((s) => s.copyWith(notificationsEnabled: next));
+    debugPrint('[Settings] Notifications ${next ? "enabled" : "disabled"}');
   }
 
   Future<void> setLanguage(String lang) async {

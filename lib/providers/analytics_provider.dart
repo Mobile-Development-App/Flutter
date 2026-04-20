@@ -155,8 +155,8 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
         }).toList();
       },
       countRecords:   (list) => list.length,
-      onFallback:     (_)    => MockData.generateSalesData(days: range.days),
-      fallbackReason: 'API unavailable — MockData fallback',
+      onFallback:     (_)    => <SalesDataPoint>[],
+      fallbackReason: 'API unavailable — sin datos de ventas',
     );
   }
 

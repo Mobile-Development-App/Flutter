@@ -168,52 +168,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             : const Text('Iniciar Sesión'),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: AppColors.darkBorder.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            'o',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.darkTextTertiary,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: AppColors.darkBorder.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: isLoggingIn
-                            ? null
-                            : () {
-                                context.hideKeyboard();
-                                ref.read(authProvider.notifier).signInWithGoogle();
-                              },
-                        icon: const Icon(Icons.login_rounded, size: 22),
-                        label: const Text('Continuar con Google'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.darkTextPrimary,
-                          side: const BorderSide(color: AppColors.darkBorder),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),

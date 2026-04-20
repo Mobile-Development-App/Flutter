@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/api_constants.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
+import '../services/google_id_token.dart';
 import '../core/utils/extensions.dart';
 import '../core/utils/validators.dart';
 
@@ -279,6 +281,82 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
+  /// Google (Gmail): **GIS** en web; OAuth nativo en móvil. Luego el mismo
+  /// `POST /auth/login` que el correo (el usuario debe existir en el backend).
+  Future<void> signInWithGoogle() async {
+    final s = state.value;
+    if (s == null || s.isLoggingIn) return;
+    _update((c) => c.copyWith(isLoggingIn: true, clearLoginError: true));
+
+    try {
+      final googleJwt = await requestGoogleIdToken();
+      if (googleJwt == null || googleJwt.isEmpty) {
+        _update((c) => c.copyWith(
+              isLoggingIn: false,
+              loginError: kIsWeb
+                  ? 'No se obtuvo credencial con Google Identity Services. '
+                      'Configura GOOGLE_WEB_CLIENT_ID y revisa bloqueos del navegador o FedCM.'
+                  : 'No se pudo iniciar con Google. En Android/iOS suele hacer '
+                      'falta GOOGLE_WEB_CLIENT_ID (cliente OAuth web).',
+            ));
+        return;
+      }
+
+      final gCred = fb.GoogleAuthProvider.credential(idToken: googleJwt);
+      final credential = await _fbAuth.signInWithCredential(gCred);
+
+      final fbUser = credential.user;
+      if (fbUser == null) throw Exception('Firebase no devolvió usuario');
+
+      final idToken = await fbUser.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('No se pudo obtener el ID Token de Firebase');
+      }
+
+      debugPrint('[AUTH] POST /auth/login (Google) uid: ${fbUser.uid}');
+      final body = await _api.post(kAuthLogin, {'uid': fbUser.uid})
+          as Map<String, dynamic>;
+
+      final storeId = body['storeId'] as String? ?? '';
+      if (storeId.isEmpty) {
+        throw Exception('El backend no devolvió storeId');
+      }
+
+      await _api.setAuth(idToken, storeId, uid: fbUser.uid);
+
+      final user = User.fromBackendJson(body);
+      await _saveUserCache(user);
+      await HapticManager.success();
+
+      _update((c) => c.copyWith(
+            isLoggingIn: false,
+            isAuthenticated: true,
+            currentUser: user,
+          ));
+    } on fb.FirebaseAuthException catch (e) {
+      debugPrint('[AUTH] Google FirebaseAuthException: ${e.code} — ${e.message}');
+      await HapticManager.error();
+      _update((c) => c.copyWith(
+            isLoggingIn: false,
+            loginError: _mapFirebaseError(e.code),
+          ));
+    } on ApiException catch (e) {
+      debugPrint('[AUTH] Google ApiException: ${e.statusCode} — ${e.message}');
+      await HapticManager.error();
+      _update((c) => c.copyWith(
+            isLoggingIn: false,
+            loginError: _mapApiError(e),
+          ));
+    } catch (e, stack) {
+      debugPrint('[AUTH] Google unexpected: $e\n$stack');
+      await HapticManager.error();
+      _update((c) => c.copyWith(
+            isLoggingIn: false,
+            loginError: kDebugMode ? 'Error: $e' : 'No se pudo iniciar con Google.',
+          ));
+    }
+  }
+
   // ── Register ──────────────────────────────
 
   Future<void> signUp() async {
@@ -389,6 +467,11 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   Future<void> logout() async {
     try { await _api.post(kAuthLogout, {}); } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {}
+    }
     try { await _fbAuth.signOut(); } catch (_) {}
     await _api.clearAuth();
     final prefs = await SharedPreferences.getInstance();

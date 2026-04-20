@@ -439,6 +439,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               child: TextField(
                 controller: _passCtrl,
                 obscureText: !_showPassword,
+                maxLength: 20,
+                buildCounter:
+                    (context, {required currentLength, required isFocused, required maxLength}) =>
+                        null,
                 onChanged: (_) => setState(() {}),
                 onTap: () => setState(() => _showPasswordRules = true),
                 decoration: const InputDecoration(
@@ -544,7 +548,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           }),
           const SizedBox(height: 4),
           Text(
-            'Caracteres especiales permitidos: ! @ # \$ % ^ & * ( ) _ + - = [ ] { } | ; : \' " , . / < > ?',
+            'Caracteres especiales permitidos: ! @ # \$ % ^ & * ( ) _ + - = [ ] { } | ; : \' " , . / < > ? ` ~',
             style: AppTypography.caption2.copyWith(
               color: AppColors.textTertiary,
             ),
@@ -579,6 +583,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               child: TextField(
                 controller: _confirmPassCtrl,
                 obscureText: !_showConfirmPassword,
+                maxLength: 20,
+                buildCounter:
+                    (context, {required currentLength, required isFocused, required maxLength}) =>
+                        null,
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   hintText: 'Repite tu contraseña',

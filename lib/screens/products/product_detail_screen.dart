@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -10,7 +11,7 @@ import '../../providers/restock_latency_provider.dart';
 import '../../widgets/app_card.dart';
 import 'add_product_screen.dart';
 
-class ProductDetailScreen extends ConsumerWidget {
+class ProductDetailScreen extends ConsumerStatefulWidget {
   final Product product;
 
   const ProductDetailScreen({
@@ -19,8 +20,33 @@ class ProductDetailScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductDetailScreen> createState() =>
+      _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
+  bool _saleLoading = false;
+
+  Product get _current {
+    final inv = ref.read(inventoryProvider).value;
+    if (inv == null) return widget.product;
+    return inv.products.firstWhere(
+      (p) => p.id == widget.product.id,
+      orElse: () => widget.product,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = context.isDark;
+
+    final inv = ref.watch(inventoryProvider).value;
+    final product = inv?.products.firstWhere(
+          (p) => p.id == widget.product.id,
+          orElse: () => widget.product,
+        ) ??
+        widget.product;
+
     final analysis = product.smartAnalysis;
     final restockInfo = ref.watch(restockLatencyProvider(product.id));
     final restockDays = restockInfo.recommendedDays ??
@@ -40,34 +66,28 @@ class ProductDetailScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _heroSection(),
+            _heroSection(product),
             const SizedBox(height: 16),
-            _topMetrics(),
+            _topMetrics(product),
             const SizedBox(height: 16),
-
-            /// 🔥 SMART FEATURE (NUEVO)
-            _smartFeatureCard(analysis),
-
+            _smartFeatureCard(product, analysis),
             if (product.stockStatus != StockStatus.inStock) ...[
               const SizedBox(height: 16),
               _restockBanner(product, restockDays, isDark),
             ],
             const SizedBox(height: 16),
-            _detailsSection(),
+            _detailsSection(product),
             const SizedBox(height: 16),
-            _financialSection(),
+            _financialSection(product),
             const SizedBox(height: 20),
-            _actions(context, ref),
+            _actions(context, product),
           ],
         ),
       ),
     );
   }
 
-  // ─────────────────────────────────────────────
-  // HERO (imagen + nombre)
-  // ─────────────────────────────────────────────
-  Widget _heroSection() {
+  Widget _heroSection(Product product) {
     return AppCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -75,25 +95,15 @@ class ProductDetailScreen extends ConsumerWidget {
           Container(
             height: 140,
             alignment: Alignment.center,
-            child: Icon(
-              product.category.icon,
-              size: 60,
-              color: AppColors.warning,
-            ),
+            child: Icon(product.category.icon, size: 60, color: AppColors.warning),
           ),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
-                Text(
-                  product.name.toUpperCase(),
-                  style: AppTypography.title,
-                ),
+                Text(product.name.toUpperCase(), style: AppTypography.title),
                 const SizedBox(height: 6),
-                Text(
-                  product.category.label,
-                  style: AppTypography.caption,
-                ),
+                Text(product.category.label, style: AppTypography.caption),
               ],
             ),
           ),
@@ -102,25 +112,22 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // MÉTRICAS PRINCIPALES (como tu imagen)
-  // ─────────────────────────────────────────────
-  Widget _topMetrics() {
+  Widget _topMetrics(Product product) {
     return Column(
       children: [
         Row(
           children: [
-            Expanded(
-              child: _metricCard(
-                'Precio de Venta',
-                product.salePrice.currencyFormatted,
-              ),
-            ),
+            Expanded(child: _metricCard('Precio de Venta', product.salePrice.currencyFormatted)),
             const SizedBox(width: 10),
             Expanded(
               child: _metricCard(
                 'Cantidad',
                 '${product.quantity} uds',
+                color: product.stockStatus == StockStatus.outOfStock
+                    ? AppColors.error
+                    : product.stockStatus == StockStatus.lowStock
+                        ? AppColors.warning
+                        : null,
               ),
             ),
           ],
@@ -128,20 +135,9 @@ class ProductDetailScreen extends ConsumerWidget {
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(
-              child: _metricCard(
-                'Precio de Costo',
-                product.costPrice.currencyFormatted,
-              ),
-            ),
+            Expanded(child: _metricCard('Precio de Costo', product.costPrice.currencyFormatted)),
             const SizedBox(width: 10),
-            Expanded(
-              child: _metricCard(
-                'Margen',
-                product.profitMargin.percentFormatted,
-                color: AppColors.success,
-              ),
-            ),
+            Expanded(child: _metricCard('Margen', product.profitMargin.percentFormatted, color: AppColors.success)),
           ],
         ),
       ],
@@ -153,10 +149,7 @@ class ProductDetailScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value,
-              style: AppTypography.title3.copyWith(
-                color: color,
-              )),
+          Text(value, style: AppTypography.title3.copyWith(color: color)),
           const SizedBox(height: 4),
           Text(label, style: AppTypography.caption),
         ],
@@ -164,14 +157,13 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _smartFeatureCard(SmartProductAnalysis analysis) {
+  Widget _smartFeatureCard(Product product, SmartProductAnalysis analysis) {
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Smart Feature', style: AppTypography.headline),
           const SizedBox(height: 10),
-
           Text(
             analysis.headline,
             style: AppTypography.callout.copyWith(
@@ -179,32 +171,16 @@ class ProductDetailScreen extends ConsumerWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 10),
-
           Wrap(
             spacing: 8,
             children: [
-              _chip(
-                product.marginHealth.label,
-                product.marginHealth.icon,
-                product.marginHealth.color,
-              ),
-              _chip(
-                'Tendencia ${product.stockTrend.label}',
-                product.stockTrend.icon,
-                product.stockTrend.color,
-              ),
-              _chip(
-                'Utilidad ${product.profitPerUnit.currencyFormatted}',
-                Icons.attach_money,
-                AppColors.success,
-              ),
+              _chip(product.marginHealth.label, product.marginHealth.icon, product.marginHealth.color),
+              _chip('Tendencia ${product.stockTrend.label}', product.stockTrend.icon, product.stockTrend.color),
+              _chip('Utilidad ${product.profitPerUnit.currencyFormatted}', Icons.attach_money, AppColors.success),
             ],
           ),
-
           const SizedBox(height: 10),
-
           Text(analysis.message, style: AppTypography.body),
         ],
       ),
@@ -232,15 +208,11 @@ class ProductDetailScreen extends ConsumerWidget {
   Widget _restockBanner(Product p, int? days, bool isDark) {
     final isOut = p.stockStatus == StockStatus.outOfStock;
     final color = isOut ? AppColors.error : AppColors.warning;
-
     return AppCard(
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Icon(
-            isOut ? Icons.cancel_rounded : Icons.warning_rounded,
-            color: color,
-          ),
+          Icon(isOut ? Icons.cancel_rounded : Icons.warning_rounded, color: color),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -248,26 +220,19 @@ class ProductDetailScreen extends ConsumerWidget {
               children: [
                 Text(
                   isOut ? 'Producto Agotado' : 'Stock Bajo',
-                  style: AppTypography.caption.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
                 ),
                 Text(
                   isOut
                       ? 'Este producto necesita reabastecimiento urgente'
                       : 'Solo quedan ${p.quantity} uds (mín: ${p.minStock})',
-                  style: AppTypography.caption2.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.caption2.copyWith(color: AppColors.textSecondary),
                 ),
                 if (days != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     'Reabastecer en ~$days día${days == 1 ? '' : 's'}',
-                    style: AppTypography.caption.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppTypography.caption.copyWith(color: color, fontWeight: FontWeight.w700),
                   ),
                 ],
               ],
@@ -278,7 +243,7 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _detailsSection() {
+  Widget _detailsSection(Product product) {
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,10 +259,7 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // FINANCIERO
-  // ─────────────────────────────────────────────
-  Widget _financialSection() {
+  Widget _financialSection(Product product) {
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,47 +279,198 @@ class ProductDetailScreen extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(value),
-        ],
+        children: [Text(label), Text(value)],
       ),
     );
   }
 
-  Widget _actions(BuildContext context, WidgetRef ref) {
+  Widget _actions(BuildContext context, Product product) {
     return Column(
       children: [
-        ElevatedButton(
-          onPressed: () async {
-            final updated = await Navigator.push<Product>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AddProductScreen(editingProduct: product),
-              ),
-            );
-
-            if (updated != null) {
-              ref.read(inventoryProvider.notifier).updateProduct(updated);
-            }
-          },
-          child: const Text('Editar Producto'),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            icon: _saleLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.point_of_sale_rounded, size: 18),
+            label: Text(_saleLoading ? 'Registrando...' : 'Registrar Venta'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: _saleLoading ? null : () => _showSaleDialog(context, product),
+          ),
         ),
         const SizedBox(height: 10),
-        OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.error,
-            side: const BorderSide(color: AppColors.error),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () async {
+              final updated = await Navigator.push<Product>(
+                context,
+                MaterialPageRoute(builder: (_) => AddProductScreen(editingProduct: product)),
+              );
+              if (updated != null) {
+                ref.read(inventoryProvider.notifier).updateProduct(updated);
+              }
+            },
+            child: const Text('Editar Producto'),
           ),
-          onPressed: () => _confirmDelete(context, ref),
-          child: const Text('Eliminar Producto'),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
+            ),
+            onPressed: () => _confirmDelete(context),
+            child: const Text('Eliminar Producto'),
+          ),
         ),
       ],
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    // Ask for confirmation before deleting.
+  Future<void> _showSaleDialog(BuildContext context, Product product) async {
+    if (product.quantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este producto no tiene unidades disponibles.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final qtyController = TextEditingController(text: '1');
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Registrar Venta'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                product.name,
+                style: AppTypography.callout.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Precio: ${product.salePrice.currencyFormatted}  ·  Stock: ${product.quantity} uds',
+                style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: qtyController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Cantidad a vender',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  suffixText: 'uds',
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v ?? '');
+                  if (n == null || n <= 0) return 'Ingresa una cantidad válida';
+                  if (n > product.quantity) {
+                    return 'Stock insuficiente (disponible: ${product.quantity})';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.pop(ctx, true);
+            },
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final qty = int.tryParse(qtyController.text) ?? 0;
+    if (qty <= 0) return;
+
+    final latest = _current;
+    if (qty > latest.quantity) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Stock insuficiente. Disponible: ${latest.quantity} uds.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _saleLoading = true);
+
+    try {
+      await ref
+          .read(inventoryProvider.notifier)
+          .recordSale(latest.id, qty, latest.salePrice);
+
+      // Fuerza re-fetch de ventas en analytics (sin dependencia circular,
+      // porque esto es un Widget, no un Provider).
+      if (context.mounted) ref.invalidate(analyticsProvider);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Venta registrada: $qty uds de ${latest.name} · ${(qty * latest.salePrice).currencyFormatted}',
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al registrar la venta: $e'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saleLoading = false);
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final product = _current;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -383,11 +496,7 @@ class ProductDetailScreen extends ConsumerWidget {
     if (!context.mounted) return;
 
     try {
-      // Await the deletion — if the backend fails, an exception is thrown
-      // and the product is NOT removed from the local list.
       await ref.read(inventoryProvider.notifier).deleteProduct(product);
-
-      // Only leave the detail screen after a successful deletion.
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
       if (!context.mounted) return;

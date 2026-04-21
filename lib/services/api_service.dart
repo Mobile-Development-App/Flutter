@@ -75,6 +75,7 @@ class ApiService {
 
   bool get isAuthenticated => _idToken != null && _storeId != null;
   String? get storeId      => _storeId;
+  String? get idToken      => _idToken;
   String? get uid          => _uid;
 
   // ── Headers ───────────────────────────────

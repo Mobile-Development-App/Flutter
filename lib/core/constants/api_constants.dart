@@ -28,5 +28,9 @@ const String kAnalyticsCategoryDist = '/analytics/category-distribution';
 const String kInventoryMovements = '/inventory/movements';
 const String kInventoryAdjust    = '/inventory/adjust';
 
+// Sales
+const String kSales        = '/sales';
+const String kSalesSummary = '/sales/summary';
+
 // Restock
 const String kRestockSuggestions = '/restock/suggestions';

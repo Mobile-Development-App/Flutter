@@ -398,18 +398,18 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     }
   }
 
-  Future<void> recordSale(String productId, int quantity) async {
-    try {
-      await _api.post(kInventoryMovements, {
-        'productId': productId, 'type': 'SALE', 'quantity': quantity,
-      });
-      debugPrint('[Inventory] ✅ recordSale synced to backend');
-    } catch (e) {
-      debugPrint('[Inventory] ⚠️  recordSale API failed, updating locally: $e');
-    }
+  Future<void> recordSale(String productId, int quantity, double unitPrice) async {
     final s   = state.value!;
     final idx = s.products.indexWhere((p) => p.id == productId);
     if (idx == -1) return;
+
+    await _api.post(kSales, {
+      'productId': productId,
+      'quantity':  quantity,
+      'unitPrice': unitPrice,
+    });
+    debugPrint('[Inventory] ✅ recordSale synced to backend via POST $kSales');
+
     final product = s.products[idx].copyWith(
       quantity:    (s.products[idx].quantity - quantity).clamp(0, 999999),
       lastUpdated: DateTime.now(),
@@ -419,6 +419,8 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     _update((_) => s.copyWith(
         products: updated, alerts: newAlerts,
         dashboardStats: _buildStats(updated, s.orders, newAlerts)));
+    // analyticsProvider ya observa inventoryProvider con ref.watch(),
+    // se reconstruye automáticamente al cambiar el inventario.
   }
 
   Future<void> restockProduct(String productId, int quantity) async {

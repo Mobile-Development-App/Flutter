@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/api_constants.dart';
+import '../core/utils/auth_action_uri.dart';
+import '../firebase_options.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
 import '../core/utils/extensions.dart';
@@ -34,6 +36,7 @@ class AuthState {
   final String forgotPasswordEmail;
   final bool forgotPasswordSent;
   final String? forgotPasswordError;
+  final bool isSendingPasswordReset;
 
   const AuthState({
     this.isAuthenticated = false,
@@ -56,6 +59,7 @@ class AuthState {
     this.forgotPasswordEmail = '',
     this.forgotPasswordSent = false,
     this.forgotPasswordError,
+    this.isSendingPasswordReset = false,
   });
 
   bool get isLoginValid =>
@@ -71,7 +75,8 @@ class AuthState {
       signUpAcceptedTerms;
 
   bool get passwordsMatch    => signUpPassword == signUpConfirmPassword;
-  bool get passwordLengthValid => signUpPassword.length >= 8;
+  bool get passwordLengthValid =>
+      signUpPassword.length >= 8 && signUpPassword.length <= 20;
 
   AuthState copyWith({
     bool? isAuthenticated,
@@ -98,6 +103,7 @@ class AuthState {
     bool? forgotPasswordSent,
     String? forgotPasswordError,
     bool clearForgotError = false,
+    bool? isSendingPasswordReset,
   }) =>
       AuthState(
         isAuthenticated:        isAuthenticated ?? this.isAuthenticated,
@@ -122,6 +128,8 @@ class AuthState {
         forgotPasswordError: clearForgotError
             ? null
             : (forgotPasswordError ?? this.forgotPasswordError),
+        isSendingPasswordReset:
+            isSendingPasswordReset ?? this.isSendingPasswordReset,
       );
 }
 
@@ -353,27 +361,81 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   // ── Password Reset ────────────────────────
 
-  Future<void> sendPasswordReset() async {
+  /// Call when opening "forgot password" so a previous success/error does not stick.
+  void resetForgotPasswordFlow({required String emailHint}) {
+    _update((s) => s.copyWith(
+          forgotPasswordEmail: emailHint,
+          forgotPasswordSent: false,
+          clearForgotError: true,
+          isSendingPasswordReset: false,
+        ));
+  }
+
+  /// [email] debe ser el texto actual del campo (evita desincronía con el estado).
+  Future<void> sendPasswordReset(String email) async {
+    final raw = email.trim();
     final s = state.value;
-    if (s == null || !AppValidators.isValidEmail(s.forgotPasswordEmail)) {
-      // FIX: validación real de email (no solo contains('@'))
+    if (s == null || !AppValidators.isValidEmail(raw)) {
       _update((c) => c.copyWith(
-          forgotPasswordError: 'Ingresa un correo electrónico válido'));
+            forgotPasswordEmail: raw,
+            forgotPasswordError: 'Ingresa un correo electrónico válido',
+            isSendingPasswordReset: false,
+          ));
       return;
     }
+
+    _update((c) => c.copyWith(
+          forgotPasswordEmail: raw,
+          isSendingPasswordReset: true,
+          clearForgotError: true,
+        ));
+
     try {
+      // Plantillas de correo de Firebase en español (asunto/cuerpo según consola).
+      await _fbAuth.setLanguageCode('es');
+
+      final continueUrl = AuthActionUri.passwordResetContinueUrl();
+
       await _fbAuth.sendPasswordResetEmail(
-          email: s.forgotPasswordEmail.trim());
+        email: raw,
+        actionCodeSettings: fb.ActionCodeSettings(
+          url: continueUrl,
+          handleCodeInApp: false,
+          androidPackageName:
+              defaultTargetPlatform == TargetPlatform.android
+                  ? 'com.example.inventaria'
+                  : null,
+          iOSBundleId: defaultTargetPlatform == TargetPlatform.iOS
+              ? (DefaultFirebaseOptions.ios.iosBundleId ?? 'com.inventaria.app')
+              : null,
+        ),
+      );
+
+      if (kDebugMode) {
+        debugPrint('[AUTH] Password reset email requested for $raw');
+      }
+
       _update((c) => c.copyWith(
             forgotPasswordSent: true,
             clearForgotError: true,
+            isSendingPasswordReset: false,
           ));
     } on fb.FirebaseAuthException catch (e) {
-      _update((c) =>
-          c.copyWith(forgotPasswordError: _mapFirebaseError(e.code)));
-    } catch (_) {
-      _update((c) =>
-          c.copyWith(forgotPasswordError: 'Error al enviar el correo.'));
+      if (kDebugMode) {
+        debugPrint('[AUTH] sendPasswordResetEmail failed: ${e.code} ${e.message}');
+      }
+      _update((c) => c.copyWith(
+            forgotPasswordError: _mapFirebaseError(e.code),
+            isSendingPasswordReset: false,
+          ));
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[AUTH] sendPasswordResetEmail unexpected: $e\n$st');
+      }
+      _update((c) => c.copyWith(
+            forgotPasswordError: 'Error al enviar el correo.',
+            isSendingPasswordReset: false,
+          ));
     }
   }
 

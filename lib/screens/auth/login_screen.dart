@@ -5,7 +5,6 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../core/utils/validators.dart';
-import 'package:flutter/services.dart';
 import '../../providers/providers.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
@@ -107,7 +106,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           minimumSize: const Size(0, 36),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        onPressed: () => _showForgotPassword(context),
+                        onPressed: () => _showForgotPassword(context, ref),
                         child: Text(
                           '¿Olvidaste tu contraseña?',
                           style: AppTypography.caption.copyWith(
@@ -381,13 +380,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  void _showForgotPassword(BuildContext context) {
+  void _showForgotPassword(BuildContext context, WidgetRef ref) {
+    final hint = _emailCtrl.text.trim();
+    ref.read(authProvider.notifier).resetForgotPasswordFlow(emailHint: hint);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const ForgotPasswordScreen(),
+      builder: (_) => ForgotPasswordScreen(initialEmail: hint),
     );
   }
 }

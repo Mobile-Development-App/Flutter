@@ -46,11 +46,11 @@ abstract final class AppValidators {
 
   /// Lista de reglas individuales para mostrar en la UI.
   ///
-  /// Caracteres especiales permitidos: ! @ # $ % ^ & * ( ) _ + - = [ ] { } | ; : ' " , . / < > ?
+  /// Caracteres especiales permitidos: ! @ # $ % ^ & * ( ) _ + - = [ ] { } | ; : ' " , . / < > ? ` ~
   static final List<PasswordRule> passwordRules = [
     PasswordRule(
-      label: 'Mínimo 8 caracteres',
-      check: (p) => p.length >= 8,
+      label: 'Entre 8 y 20 caracteres',
+      check: (p) => p.length >= 8 && p.length <= 20,
     ),
     PasswordRule(
       label: 'Al menos una letra mayúscula (A–Z)',
@@ -63,6 +63,10 @@ abstract final class AppValidators {
     PasswordRule(
       label: 'Al menos un número (0–9)',
       check: (p) => RegExp(r'[0-9]').hasMatch(p),
+    ),
+    PasswordRule(
+      label: 'Al menos un carácter especial (!@#...)',
+      check: (p) => RegExp(r'''[!@#$%^&*()_+\-=[\]{}|;':",./<>?`~]''').hasMatch(p),
     ),
     PasswordRule(
       label: 'Sin espacios en blanco',

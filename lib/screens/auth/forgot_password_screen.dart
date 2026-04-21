@@ -4,10 +4,13 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../core/utils/validators.dart';
 import '../../providers/providers.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
-  const ForgotPasswordScreen({super.key});
+  final String initialEmail;
+
+  const ForgotPasswordScreen({super.key, this.initialEmail = ''});
 
   @override
   ConsumerState<ForgotPasswordScreen> createState() =>
@@ -17,6 +20,14 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 class _ForgotPasswordScreenState
     extends ConsumerState<ForgotPasswordScreen> {
   final _emailCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail.isNotEmpty) {
+      _emailCtrl.text = widget.initialEmail;
+    }
+  }
 
   @override
   void dispose() {
@@ -30,6 +41,7 @@ class _ForgotPasswordScreenState
     final authState = ref.watch(authProvider).value;
     final sent = authState?.forgotPasswordSent ?? false;
     final error = authState?.forgotPasswordError;
+    final sending = authState?.isSendingPasswordReset ?? false;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -72,7 +84,7 @@ class _ForgotPasswordScreenState
                 padding: const EdgeInsets.all(24),
                 child: sent
                     ? _successView(context, authState?.forgotPasswordEmail ?? '')
-                    : _formView(context, isDark, error),
+                    : _formView(context, isDark, error, sending),
               ),
             ),
           ],
@@ -104,6 +116,18 @@ class _ForgotPasswordScreenState
               .copyWith(color: AppColors.textSecondary),
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 16),
+        Text(
+          'Revisa también spam o la carpeta Promociones (Gmail). '
+          'El mensaje lo envía Firebase en nombre de la app. '
+          'Si no llega en varios minutos, comprueba que este sea exactamente el correo '
+          'con el que registraste tu cuenta. '
+          'Si abres el enlace en la misma URL donde usas la app web, podrás fijar la '
+          'contraseña aquí con todos los requisitos de seguridad.',
+          style: AppTypography.caption
+              .copyWith(color: AppColors.textTertiary),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 32),
         SizedBox(
           width: double.infinity,
@@ -117,7 +141,8 @@ class _ForgotPasswordScreenState
     );
   }
 
-  Widget _formView(BuildContext context, bool isDark, String? error) {
+  Widget _formView(
+      BuildContext context, bool isDark, String? error, bool sending) {
     return Column(
       children: [
         Container(
@@ -167,9 +192,10 @@ class _ForgotPasswordScreenState
                       keyboardType: TextInputType.emailAddress,
                       autocorrect: false,
                       textCapitalization: TextCapitalization.none,
-                      onChanged: (v) => ref
-                          .read(authProvider.notifier)
-                          .setForgotPasswordEmail(v),
+                      onChanged: (v) {
+                        ref.read(authProvider.notifier).setForgotPasswordEmail(v);
+                        setState(() {});
+                      },
                       decoration: const InputDecoration(
                         hintText: 'tu@correo.com',
                         border: InputBorder.none,
@@ -195,16 +221,26 @@ class _ForgotPasswordScreenState
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _emailCtrl.text.isEmpty
+            onPressed: (!AppValidators.isValidEmail(_emailCtrl.text.trim()) ||
+                    sending)
                 ? null
                 : () {
                     context.hideKeyboard();
                     ref
                         .read(authProvider.notifier)
-                        .sendPasswordReset();
+                        .sendPasswordReset(_emailCtrl.text.trim());
                   },
             style: primaryButtonStyle,
-            child: const Text('Enviar Instrucciones'),
+            child: sending
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.inkBlack,
+                    ),
+                  )
+                : const Text('Enviar Instrucciones'),
           ),
         ),
       ],

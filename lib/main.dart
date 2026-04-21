@@ -1,12 +1,14 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'core/theme/app_colors.dart';
 import 'core/theme/theme.dart';
 import 'firebase_options.dart';
 import 'providers/providers.dart';
+import 'core/utils/auth_action_uri.dart';
+import 'screens/auth/confirm_reset_password_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_tab_view.dart';
 import 'screens/onboarding/onboarding_screen.dart';
@@ -76,6 +78,10 @@ class _AppRouter extends ConsumerStatefulWidget {
 }
 
 class _AppRouterState extends ConsumerState<_AppRouter> {
+  /// Tras completar el reset en pantalla propia, no volver a abrir el formulario
+  /// con el mismo `oobCode` en la URL.
+  bool _passwordResetFlowHandled = false;
+
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<AuthState>>(authProvider, (previous, next) {
@@ -107,8 +113,23 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
       ),
       error: (_, __) => const LoginScreen(),
       data: (authState) {
-        if (!authState.hasCompletedOnboarding) return const OnboardingScreen();
-        if (!authState.isAuthenticated)        return const LoginScreen();
+        final oob = (!_passwordResetFlowHandled && kIsWeb)
+            ? AuthActionUri.resetPasswordOobCode()
+            : null;
+
+        if (!authState.isAuthenticated && oob != null) {
+          return ConfirmResetPasswordScreen(
+            oobCode: oob,
+            onFinished: () => setState(() => _passwordResetFlowHandled = true),
+          );
+        }
+
+        if (!authState.hasCompletedOnboarding) {
+          return const OnboardingScreen();
+        }
+        if (!authState.isAuthenticated) {
+          return const LoginScreen();
+        }
         return const MainTabView();
       },
     );

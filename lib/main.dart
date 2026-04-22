@@ -10,8 +10,11 @@ import 'providers/providers.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_tab_view.dart';
 import 'screens/onboarding/onboarding_screen.dart';
-import 'services/usage_tracking_service.dart';
+import 'services/cache_service.dart';
+import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
+import 'services/offline_queue_service.dart';
+import 'services/usage_tracking_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +28,11 @@ void main() async {
 
   // Estrategia de almacenamiento local (Hive) — Sprint 3.
   await UsageTrackingService.shared.init();
+
+  // Sprint 4 — Eventual connectivity + Caching strategy.
+  await ConnectivityService.shared.init();
+  await OfflineQueueService.shared.init();
+  await CacheService.shared.init();
 
   // Inicializar notificaciones locales (canales Android + config iOS).
   // El permiso real se pide cuando el usuario activa el toggle en Ajustes.

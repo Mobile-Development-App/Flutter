@@ -39,6 +39,8 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
   @override
   Widget build(BuildContext context) {
     final invState = ref.watch(inventoryProvider).value;
+    final isOnline = invState?.isOnline ?? true;
+    final pending  = invState?.pendingOpsCount ?? 0;
 
     return Scaffold(
       body: Stack(
@@ -47,6 +49,14 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
             index: _selectedIndex,
             children: _screens,
           ),
+          // ── Offline / syncing banner (Sprint 4) ──────────────────────────
+          if (!isOnline || (isOnline && pending > 0))
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _OfflineBanner(isOnline: isOnline, pendingCount: pending),
+            ),
           Positioned(
             left: 0,
             right: 0,
@@ -207,6 +217,75 @@ class _TabItem {
   const _TabItem(this.icon, this.label);
 }
 
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _OfflineBanner — Sprint 4 (Eventual Connectivity)
+//
+// Muestra una barra animada en la parte superior de la pantalla:
+//   • Rojo   — sin conexión (modo offline)
+//   • Ámbar  — reconectado pero con ops pendientes de sincronizar
+//
+// Se usa AnimatedSlide + AnimatedOpacity para que la entrada/salida sea suave.
+// Respeta el SafeArea para no solapar el notch/status bar del dispositivo.
+// ─────────────────────────────────────────────────────────────────────────────
+class _OfflineBanner extends StatelessWidget {
+  final bool isOnline;
+  final int pendingCount;
+
+  const _OfflineBanner({required this.isOnline, required this.pendingCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final isSyncing = isOnline && pendingCount > 0;
+    final color     = isSyncing ? const Color(0xFFE69B1E) : const Color(0xFFD94040);
+    final icon      = isSyncing ? Icons.sync_rounded       : Icons.wifi_off_rounded;
+    final label     = isSyncing
+        ? 'Sincronizando $pendingCount operación${pendingCount == 1 ? "" : "es"}...'
+        : 'Sin conexión — cambios guardados localmente';
+
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        bottom: false,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          color: color,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 15),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isSyncing)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 1.8,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 class _FullScreenModal extends StatelessWidget {
   final Widget child;
   const _FullScreenModal({required this.child});

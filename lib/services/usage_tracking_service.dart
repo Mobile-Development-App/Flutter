@@ -82,6 +82,40 @@ class FeatureUsageInsight {
   });
 }
 
+class ExpiryPriorityInsight {
+  final String productId;
+  final String productName;
+  final String action;
+  final int count;
+
+  const ExpiryPriorityInsight({
+    required this.productId,
+    required this.productName,
+    required this.action,
+    required this.count,
+  });
+}
+
+class ManualCorrectionInsight {
+  final String productId;
+  final String productName;
+  final int correctionCount;
+  final int totalAdjustment;
+  final double averageAdjustment;
+  final String lastAutoSource;
+  final DateTime lastCorrectionAt;
+
+  const ManualCorrectionInsight({
+    required this.productId,
+    required this.productName,
+    required this.correctionCount,
+    required this.totalAdjustment,
+    required this.averageAdjustment,
+    required this.lastAutoSource,
+    required this.lastCorrectionAt,
+  });
+}
+
 // ── Funciones top-level para compute() ───────────────────────────────────────
 // DEBEN ser top-level (no métodos de clase) para que Dart pueda
 // transferirlas al Isolate sin serializar el heap completo.
@@ -160,6 +194,90 @@ List<FeatureUsageInsight> _aggregateFeatureUsage(
     ..sort((a, b) => b.usageCount.compareTo(a.usageCount));
 }
 
+List<ExpiryPriorityInsight> _aggregateExpiryPriorityActions(
+    List<Map<String, dynamic>> rows) {
+  final Map<String, Map<String, dynamic>> buckets = {};
+  for (final row in rows) {
+    final productId = row['product_id'] as String;
+    final productName = row['product_name'] as String;
+    final action = row['action'] as String;
+    final key = '$productId|$action';
+    buckets.putIfAbsent(
+      key,
+      () => {
+        'productId': productId,
+        'productName': productName,
+        'action': action,
+        'count': 0,
+      },
+    );
+    buckets[key]!['count'] = (buckets[key]!['count'] as int) + 1;
+  }
+
+  return buckets.values
+      .map((b) => ExpiryPriorityInsight(
+            productId: b['productId'] as String,
+            productName: b['productName'] as String,
+            action: b['action'] as String,
+            count: b['count'] as int,
+          ))
+      .toList()
+    ..sort((a, b) => b.count.compareTo(a.count));
+}
+
+
+
+List<ManualCorrectionInsight> _aggregateManualCorrections(
+    List<Map<String, dynamic>> rows) {
+  final Map<String, Map<String, dynamic>> buckets = {};
+  for (final row in rows) {
+    final productId = row['product_id'] as String? ?? '';
+    final productName = row['product_name'] as String? ?? 'Producto';
+    final adjustment = row['adjustment'] as int? ?? 0;
+    final source = row['last_auto_source'] as String? ?? 'manual';
+    final recordedAt = row['recorded_at'] as int? ?? 0;
+    buckets.putIfAbsent(
+      productId,
+      () => {
+        'productId': productId,
+        'productName': productName,
+        'correctionCount': 0,
+        'totalAdjustment': 0,
+        'lastAutoSource': source,
+        'lastCorrectionAt': recordedAt,
+      },
+    );
+    buckets[productId]!['correctionCount'] =
+        (buckets[productId]!['correctionCount'] as int) + 1;
+    buckets[productId]!['totalAdjustment'] =
+        (buckets[productId]!['totalAdjustment'] as int) + adjustment;
+    if (recordedAt >= (buckets[productId]!['lastCorrectionAt'] as int)) {
+      buckets[productId]!['lastCorrectionAt'] = recordedAt;
+      buckets[productId]!['lastAutoSource'] = source;
+      buckets[productId]!['productName'] = productName;
+    }
+  }
+
+  return buckets.values
+      .map((b) {
+        final count = b['correctionCount'] as int;
+        final total = b['totalAdjustment'] as int;
+        return ManualCorrectionInsight(
+          productId: b['productId'] as String,
+          productName: b['productName'] as String,
+          correctionCount: count,
+          totalAdjustment: total,
+          averageAdjustment: count == 0 ? 0 : total / count,
+          lastAutoSource: b['lastAutoSource'] as String,
+          lastCorrectionAt: DateTime.fromMillisecondsSinceEpoch(
+            b['lastCorrectionAt'] as int,
+          ),
+        );
+      })
+      .toList()
+    ..sort((a, b) => b.correctionCount.compareTo(a.correctionCount));
+}
+
 // ── Servicio principal ────────────────────────────────────────────────────────
 
 class UsageTrackingService {
@@ -171,6 +289,9 @@ class UsageTrackingService {
   static const _boxFeatures = 'feature_events';  // BQ8
   static const _boxEntries  = 'entry_methods';   // BQ7
   static const _boxLatency  = 'latency_records'; // BQ1
+  static const _boxExpiryActions = 'expiry_priority_actions'; // BQ4
+  static const _boxAutoUpdates = 'auto_inventory_updates'; // BQ6
+  static const _boxManualCorrections = 'manual_inventory_corrections'; // BQ6
 
   bool      _initialized      = false;
   DateTime? _currentScreenStart;
@@ -187,6 +308,9 @@ class UsageTrackingService {
       Hive.openBox<Map>(_boxFeatures),
       Hive.openBox<Map>(_boxEntries),
       Hive.openBox<Map>(_boxLatency),
+      Hive.openBox<Map>(_boxExpiryActions),
+      Hive.openBox<Map>(_boxAutoUpdates),
+      Hive.openBox<Map>(_boxManualCorrections),
     ]);
     _initialized = true;
     debugPrint('[UsageTrackingService] Hive inicializado — 4 boxes abiertos');
@@ -196,6 +320,9 @@ class UsageTrackingService {
   Box<Map> get _features => Hive.box<Map>(_boxFeatures);
   Box<Map> get _entries  => Hive.box<Map>(_boxEntries);
   Box<Map> get _latency  => Hive.box<Map>(_boxLatency);
+  Box<Map> get _expiryActions => Hive.box<Map>(_boxExpiryActions);
+  Box<Map> get _autoUpdates => Hive.box<Map>(_boxAutoUpdates);
+  Box<Map> get _manualCorrections => Hive.box<Map>(_boxManualCorrections);
 
   // ── BQ5: Tracking de sesiones de pantalla ────────────────────────────────
 
@@ -255,6 +382,64 @@ class UsageTrackingService {
         break;
       }
     }
+  }
+
+  // ── BQ4: prioridad por productos próximos a caducar ───────────────────────
+
+  Future<void> trackAutoInventoryUpdate({
+    required String productId,
+    required String productName,
+    required String source,
+    required int previousQuantity,
+    required int newQuantity,
+  }) async {
+    await _autoUpdates.add({
+      'product_id': productId,
+      'product_name': productName,
+      'source': source,
+      'previous_quantity': previousQuantity,
+      'new_quantity': newQuantity,
+      'recorded_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<void> trackManualInventoryCorrection({
+    required String productId,
+    required String productName,
+    required int previousQuantity,
+    required int newQuantity,
+  }) async {
+    Map<dynamic, dynamic>? latestAuto;
+    for (final key in _autoUpdates.keys.toList().reversed) {
+      final item = _autoUpdates.get(key);
+      if (item != null && item['product_id'] == productId) {
+        latestAuto = item;
+        break;
+      }
+    }
+
+    await _manualCorrections.add({
+      'product_id': productId,
+      'product_name': productName,
+      'previous_quantity': previousQuantity,
+      'new_quantity': newQuantity,
+      'adjustment': newQuantity - previousQuantity,
+      'last_auto_source': latestAuto?['source'] ?? 'manual',
+      'recorded_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<void> trackExpiryPriorityAction({
+    required String productId,
+    required String productName,
+    required String action, // "sell" or "remove"
+  }) async {
+    await _expiryActions.add({
+      'product_id': productId,
+      'product_name': productName,
+      'action': action,
+      'recorded_at': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
   // ── BQ1: Registro de latencias ────────────────────────────────────────────
@@ -327,6 +512,33 @@ class UsageTrackingService {
         .toList();
     // ── ISOLATE ───────────────────────────────────────────────────────────
     return compute(_aggregateFeatureUsage, rows);
+  }
+
+  /// BQ4 — productos priorizados para venta/eliminacion por proximidad a caducar
+  Future<List<ManualCorrectionInsight>> getManualCorrectionInsights({
+    int limitDays = 30,
+  }) async {
+    final cutoff = DateTime.now()
+        .subtract(Duration(days: limitDays))
+        .millisecondsSinceEpoch;
+    final rows = _manualCorrections.values
+        .where((m) => (m['recorded_at'] as int) >= cutoff)
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    return compute(_aggregateManualCorrections, rows);
+  }
+
+  Future<List<ExpiryPriorityInsight>> getExpiryPriorityInsights({
+    int limitDays = 30,
+  }) async {
+    final cutoff = DateTime.now()
+        .subtract(Duration(days: limitDays))
+        .millisecondsSinceEpoch;
+    final rows = _expiryActions.values
+        .where((m) => (m['recorded_at'] as int) >= cutoff)
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    return compute(_aggregateExpiryPriorityActions, rows);
   }
 
   // ── Utilidad ──────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
 import '../../services/usage_tracking_service.dart';
 import 'usage_insights_screen.dart';
+import 'business_questions_screen.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -61,6 +62,15 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const UsageInsightsScreen(),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.quiz_rounded),
+            tooltip: 'Business Questions',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const BusinessQuestionsScreen(),
               ),
             ),
           ),

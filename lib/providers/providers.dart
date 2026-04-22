@@ -6,3 +6,4 @@ export 'settings_provider.dart';
 export 'context_provider.dart';
 export 'restock_ai_suggestions_provider.dart';
 export 'usage_analytics_provider.dart';
+export 'business_questions_provider.dart';

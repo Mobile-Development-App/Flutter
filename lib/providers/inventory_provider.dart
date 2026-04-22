@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -5,6 +7,9 @@ import 'package:uuid/uuid.dart';
 import '../core/constants/api_constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/cache_service.dart';
+import '../services/connectivity_service.dart';
+import '../services/offline_queue_service.dart';
 import '../services/persistence_service.dart';
 import '../core/utils/extensions.dart';
 import '../services/notification_service.dart';
@@ -66,6 +71,12 @@ class InventoryState {
   final ScannedProductResult? scannedProduct;
   final bool isScanning;
 
+  /// Número de operaciones pendientes en la cola offline.
+  final int pendingOpsCount;
+
+  /// Si el dispositivo está actualmente online.
+  final bool isOnline;
+
   const InventoryState({
     this.products = const [],
     this.alerts = const [],
@@ -84,6 +95,8 @@ class InventoryState {
     this.productSaved = false,
     this.scannedProduct,
     this.isScanning = false,
+    this.pendingOpsCount = 0,
+    this.isOnline = true,
   });
 
   List<Product> get filteredProducts {
@@ -143,6 +156,7 @@ class InventoryState {
     bool clearEditingProduct = false, bool? showingAddProduct,
     bool? productSaved, ScannedProductResult? scannedProduct,
     bool clearScannedProduct = false, bool? isScanning,
+    int? pendingOpsCount, bool? isOnline,
   }) =>
       InventoryState(
         products:       products       ?? this.products,
@@ -158,6 +172,8 @@ class InventoryState {
         productSaved:    productSaved ?? this.productSaved,
         scannedProduct:  clearScannedProduct ? null : (scannedProduct ?? this.scannedProduct),
         isScanning:      isScanning ?? this.isScanning,
+        pendingOpsCount: pendingOpsCount ?? this.pendingOpsCount,
+        isOnline:        isOnline ?? this.isOnline,
       );
 }
 
@@ -165,17 +181,35 @@ class InventoryState {
 // InventoryNotifier
 // ─────────────────────────────────────────────
 class InventoryNotifier extends AsyncNotifier<InventoryState> {
-  final _api         = ApiService.shared;
-  final _persistence = PersistenceService.shared;
+  final _api          = ApiService.shared;
+  final _persistence  = PersistenceService.shared;
+  final _cache        = CacheService.shared;
+  final _queue        = OfflineQueueService.shared;
+  final _connectivity = ConnectivityService.shared;
+
   static const _uuid = Uuid();
+
+  StreamSubscription<bool>? _connectivitySub;
 
   @override
   Future<InventoryState> build() async {
+    // ── Suscribirse a cambios de conectividad ─────────────────────────────
+    _connectivitySub = _connectivity.onConnectivityChanged.listen(
+      (isOnline) async {
+        debugPrint('[Inventory] conectividad → isOnline=$isOnline');
+        _update((s) => s.copyWith(isOnline: isOnline));
+        if (isOnline) {
+          await _drainOfflineQueue();
+        }
+      },
+    );
+    ref.onDispose(() => _connectivitySub?.cancel());
+
     return _loadAll();
   }
 
   Future<InventoryState> _loadAll() async {
-    debugPrint('[Inventory] Loading all data from backend...');
+    debugPrint('[Inventory] Loading all data...');
 
     final results = await Future.wait([
       _fetchProducts(),
@@ -190,82 +224,142 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
 
     debugPrint('[Inventory] Loaded — '
         '${products.length} products, '
-        '${alerts.length} alerts, '
-        'dashboard: ${dashboard != null ? "real" : "computed from products"}');
+        '${alerts.length} alerts');
 
     return InventoryState(
-      products:       products,
-      alerts:         alerts,
-      dashboardStats: stats,
+      products:        products,
+      alerts:          alerts,
+      dashboardStats:  stats,
+      isOnline:        _connectivity.isOnline,
+      pendingOpsCount: _queue.pendingCount,
     );
   }
 
-  // ── API Fetchers ──────────────────────────
+  // ── API Fetchers con Cache-Aside ──────────────────────────────────────────
 
   Future<List<Product>> _fetchProducts() async {
+    final cached = _cache.get(CacheKeys.products);
+    if (cached != null) {
+      try {
+        final products = (cached as List)
+            .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
+            .toList();
+        debugPrint('[Inventory] cache HIT products (${products.length})');
+        return products;
+      } catch (_) {
+        await _cache.invalidate(CacheKeys.products);
+      }
+    }
+
     try {
       debugPrint('[Inventory] GET $kProducts');
       final data = await _api.get(kProducts) as dynamic;
-      debugPrint('[Inventory] products raw type: ${data.runtimeType}');
-      if (data is Map) debugPrint('[Inventory] products keys: ${data.keys.toList()}');
       final list = _extractList(data);
       final products = list
           .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
           .toList();
-      debugPrint('[Inventory] ✅ Products: ${products.length} items from backend');
+      await _cache.put(CacheKeys.products, list);
+      debugPrint('[Inventory] products from API (${products.length}) → cached');
       return products;
     } catch (e) {
-      debugPrint('[Inventory] ⚠️  FALLBACK — fetchProducts failed: $e');
-      debugPrint('[Inventory] ⚠️  Using MockData.products (${MockData.products.length} items)');
+      debugPrint('[Inventory] fetchProducts failed: $e');
+      final stale = _cache.get(CacheKeys.products, allowStale: true);
+      if (stale != null) {
+        try {
+          final products = (stale as List)
+              .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
+              .toList();
+          debugPrint('[Inventory] products from STALE cache (${products.length})');
+          return products;
+        } catch (_) {}
+      }
+      debugPrint('[Inventory] fallback MockData.products');
       return MockData.products;
     }
   }
 
   Future<List<InventoryAlert>> _fetchAlerts() async {
+    final cached = _cache.get(CacheKeys.alerts);
+    if (cached != null) {
+      try {
+        final alerts = (cached as List)
+            .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
+            .toList();
+        debugPrint('[Inventory] cache HIT alerts (${alerts.length})');
+        return alerts;
+      } catch (_) {
+        await _cache.invalidate(CacheKeys.alerts);
+      }
+    }
+
     try {
       debugPrint('[Inventory] GET $kAlerts');
       final data = await _api.get(kAlerts) as dynamic;
-      debugPrint('[Inventory] alerts raw type: ${data.runtimeType}');
-      if (data is Map) debugPrint('[Inventory] alerts keys: ${data.keys.toList()}');
       final list = _extractList(data);
       final alerts = list
           .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
           .toList();
-      debugPrint('[Inventory] ✅ Alerts: ${alerts.length} items from backend');
+      await _cache.put(CacheKeys.alerts, list);
+      debugPrint('[Inventory] alerts from API (${alerts.length}) → cached');
       return alerts;
     } catch (e) {
-      debugPrint('[Inventory] ⚠️  FALLBACK — fetchAlerts failed: $e');
-      debugPrint('[Inventory] ⚠️  Using MockData.alerts (${MockData.alerts.length} items)');
+      debugPrint('[Inventory] fetchAlerts failed: $e');
+      final stale = _cache.get(CacheKeys.alerts, allowStale: true);
+      if (stale != null) {
+        try {
+          final alerts = (stale as List)
+              .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
+              .toList();
+          debugPrint('[Inventory] alerts from STALE cache (${alerts.length})');
+          return alerts;
+        } catch (_) {}
+      }
       return MockData.alerts;
     }
   }
 
   Future<DashboardStats?> _fetchDashboard() async {
+    final cached = _cache.get(CacheKeys.dashboard);
+    if (cached != null) {
+      try {
+        debugPrint('[Inventory] cache HIT dashboard');
+        return _parseDashboardStats(cached as Map<String, dynamic>);
+      } catch (_) {
+        await _cache.invalidate(CacheKeys.dashboard);
+      }
+    }
+
     try {
       debugPrint('[Inventory] GET $kAnalyticsDashboard');
       final data = await _api.get(kAnalyticsDashboard) as Map<String, dynamic>?;
-      if (data == null) {
-        debugPrint('[Inventory] ⚠️  FALLBACK — dashboard returned null, will compute from products');
-        return null;
-      }
-      final stats = DashboardStats(
-        totalProducts:   (data['totalProducts']   as num?)?.toInt()    ?? 0,
-        lowStockCount:   (data['lowStockCount']   as num?)?.toInt()    ?? 0,
-        outOfStockCount: (data['outOfStockCount'] as num?)?.toInt()    ?? 0,
-        totalStockValue: (data['totalStockValue'] as num?)?.toDouble() ?? 0,
-        totalSalesToday: (data['totalSalesToday'] as num?)?.toDouble() ??
-                         (data['salesToday']      as num?)?.toDouble() ?? 0,
-        totalOrders:     (data['totalOrders']     as num?)?.toInt()    ?? 0,
-        expiringCount:   (data['expiringCount']   as num?)?.toInt()    ?? 0,
-        activeAlerts:    (data['activeAlerts']    as num?)?.toInt()    ?? 0,
-      );
-      debugPrint('[Inventory] ✅ Dashboard stats from backend');
-      return stats;
+      if (data == null) return null;
+      await _cache.put(CacheKeys.dashboard, data);
+      debugPrint('[Inventory] dashboard from API → cached');
+      return _parseDashboardStats(data);
     } catch (e) {
-      debugPrint('[Inventory] ⚠️  FALLBACK — fetchDashboard failed: $e');
-      debugPrint('[Inventory] ⚠️  Dashboard will be computed locally from products');
+      debugPrint('[Inventory] fetchDashboard failed: $e');
+      final stale = _cache.get(CacheKeys.dashboard, allowStale: true);
+      if (stale != null) {
+        try {
+          return _parseDashboardStats(stale as Map<String, dynamic>);
+        } catch (_) {}
+      }
       return null;
     }
+  }
+
+  DashboardStats _parseDashboardStats(Map<String, dynamic> data) {
+    return DashboardStats(
+      totalProducts:   (data['totalProducts']   as num?)?.toInt()    ?? 0,
+      lowStockCount:   (data['lowStockCount']   as num?)?.toInt()    ?? 0,
+      outOfStockCount: (data['outOfStockCount'] as num?)?.toInt()    ?? 0,
+      totalStockValue: (data['totalStockValue'] as num?)?.toDouble() ?? 0,
+      totalSalesToday: (data['totalSalesToday'] as num?)?.toDouble() ??
+                       (data['salesToday']      as num?)?.toDouble() ?? 0,
+      totalOrders:     (data['totalOrders']     as num?)?.toInt()    ?? 0,
+      expiringCount:   (data['expiringCount']   as num?)?.toInt()    ?? 0,
+      activeAlerts:    (data['activeAlerts']    as num?)?.toInt()    ?? 0,
+    );
   }
 
   List<dynamic> _extractList(dynamic data) {
@@ -279,6 +373,47 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     return [];
   }
 
+  // ── Offline Queue ─────────────────────────────────────────────────────────
+
+  Future<void> _enqueueOp(OfflineOpType type, Map<String, dynamic> payload) async {
+    final op = OfflineQueueService.createOp(type: type, payload: payload);
+    await _queue.enqueue(op);
+    _update((s) => s.copyWith(pendingOpsCount: _queue.pendingCount));
+  }
+
+  Future<void> _drainOfflineQueue() async {
+    if (_queue.pendingCount == 0) return;
+    debugPrint('[Inventory] Reconectado — drenando cola (${_queue.pendingCount} ops)');
+
+    final count = await _queue.drainQueue(_executeQueuedOp);
+
+    if (count > 0) {
+      await _cache.invalidateAll([
+        CacheKeys.products, CacheKeys.alerts, CacheKeys.dashboard,
+      ]);
+      debugPrint('[Inventory] cola drenada — refrescando estado...');
+      state = const AsyncLoading();
+      state = await AsyncValue.guard(_loadAll);
+    }
+
+    _update((s) => s.copyWith(pendingOpsCount: _queue.pendingCount));
+  }
+
+  Future<void> _executeQueuedOp(OfflineOperation op) async {
+    switch (op.type) {
+      case OfflineOpType.addProduct:
+        await _api.post(kProducts, op.payload);
+      case OfflineOpType.updateProduct:
+        final id = op.payload['id'] as String;
+        await _api.patch('$kProducts/$id', op.payload);
+      case OfflineOpType.deleteProduct:
+        final id = op.payload['id'] as String;
+        await _api.delete('$kProducts/$id');
+      case OfflineOpType.recordSale:
+        await _api.post(kSales, op.payload);
+    }
+  }
+
   // ── Search & filter ───────────────────────
 
   void setSearchText(String v) => _update((s) => s.copyWith(searchText: v));
@@ -286,70 +421,93 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
   void setCategory(ProductCategory? c) => _update((s) =>
       c == null ? s.copyWith(clearCategory: true) : s.copyWith(selectedCategory: c));
 
-  // ── CRUD ──────────────────────────────────
+  // ── CRUD con offline-first + optimistic updates ───────────────────────────
 
   Future<void> addProduct(Product product) async {
-    try {
-      // Some UI flows create a new Product without `storeId`.
-      // Backend usually expects it to associate the record to the current store.
-      final productToSend = product.storeId == null
-          ? product.copyWith(storeId: _api.storeId)
-          : product;
+    final productToSend = product.storeId == null
+        ? product.copyWith(storeId: _api.storeId)
+        : product;
 
-      final body =
-          await _api.post(kProducts, productToSend.toBackendJson())
-          as Map<String, dynamic>;
-      final created = Product.fromBackendJson(
-          body['product'] as Map<String, dynamic>? ?? body);
-      final s = state.value!;
-      final updated   = [...s.products, created];
-      final newAlerts = _generateAlerts(created, s.alerts);
+    if (!_connectivity.isOnline) {
+      debugPrint('[Inventory] addProduct — OFFLINE, optimistic + encolando');
+      await _enqueueOp(OfflineOpType.addProduct, productToSend.toBackendJson());
+      final s         = state.value!;
+      final updated   = [...s.products, product];
+      final newAlerts = _generateAlerts(product, s.alerts);
       _update((_) => s.copyWith(
             products: updated, alerts: newAlerts,
-            dashboardStats: _buildStats(updated, s.orders, newAlerts)));
-      await HapticManager.success();
-    } catch (e) {
-      debugPrint('[Inventory] ⚠️  addProduct API failed, applying locally: $e');
-      final s = state.value!;
-      final updated = [...s.products, product];
-      _update((_) => s.copyWith(
-          products: updated,
-          dashboardStats: _buildStats(updated, s.orders, s.alerts)));
+            dashboardStats: _buildStats(updated, s.orders, newAlerts),
+            pendingOpsCount: _queue.pendingCount));
+    } else {
+      try {
+        final body = await _api.post(kProducts, productToSend.toBackendJson())
+            as Map<String, dynamic>;
+        final created = Product.fromBackendJson(
+            body['product'] as Map<String, dynamic>? ?? body);
+        final s         = state.value!;
+        final updated   = [...s.products, created];
+        final newAlerts = _generateAlerts(created, s.alerts);
+        await _cache.invalidate(CacheKeys.products);
+        _update((_) => s.copyWith(
+              products: updated, alerts: newAlerts,
+              dashboardStats: _buildStats(updated, s.orders, newAlerts)));
+        await HapticManager.success();
+      } catch (e) {
+        debugPrint('[Inventory] addProduct API failed, encolando: $e');
+        await _enqueueOp(OfflineOpType.addProduct, productToSend.toBackendJson());
+        final s       = state.value!;
+        final updated = [...s.products, product];
+        _update((_) => s.copyWith(
+            products: updated,
+            dashboardStats: _buildStats(updated, s.orders, s.alerts),
+            pendingOpsCount: _queue.pendingCount));
+      }
     }
-    _logAudit('Producto Agregado', 'Product', product.id, product.name,
-        'SKU: \${product.sku}');
 
+    _logAudit('Producto Agregado', 'Product', product.id, product.name,
+        'SKU: ${product.sku}');
     if (_notificationsEnabled) {
       await _notif.showProductAdded(product.name);
     }
   }
 
   Future<void> updateProduct(Product product) async {
-    // Capturamos el producto anterior ANTES de mutar el estado
     final previous = state.value?.products
         .where((p) => p.id == product.id)
         .firstOrNull;
 
-    try {
-      final productToSend = product.storeId == null
-          ? product.copyWith(storeId: _api.storeId)
-          : product;
-      await _api.patch('\$kProducts/\${product.id}', productToSend.toBackendJson());
-      debugPrint('[Inventory] ✅ updateProduct synced to backend');
-    } catch (e) {
-      debugPrint('[Inventory] ⚠️  updateProduct API failed, updating locally: \$e');
-    }
-    final s = state.value!;
-    final idx = s.products.indexWhere((p) => p.id == product.id);
-    if (idx == -1) return;
-    final updated   = [...s.products]..[idx] = product;
-    final newAlerts = _generateAlerts(product, s.alerts);
-    _update((_) => s.copyWith(
-        products: updated, alerts: newAlerts,
-        dashboardStats: _buildStats(updated, s.orders, newAlerts)));
-    _logAudit('Producto Actualizado', 'Product', product.id, product.name, '');
+    final productToSend = product.storeId == null
+        ? product.copyWith(storeId: _api.storeId)
+        : product;
 
-    // Notificar solo si algo relevante cambió
+    // Optimistic update inmediato en estado local
+    final s   = state.value!;
+    final idx = s.products.indexWhere((p) => p.id == product.id);
+    if (idx != -1) {
+      final updated   = [...s.products]..[idx] = product;
+      final newAlerts = _generateAlerts(product, s.alerts);
+      _update((_) => s.copyWith(
+          products: updated, alerts: newAlerts,
+          dashboardStats: _buildStats(updated, s.orders, newAlerts)));
+    }
+
+    if (!_connectivity.isOnline) {
+      debugPrint('[Inventory] updateProduct — OFFLINE, encolando');
+      await _enqueueOp(OfflineOpType.updateProduct, productToSend.toBackendJson());
+      _update((st) => st.copyWith(pendingOpsCount: _queue.pendingCount));
+    } else {
+      try {
+        await _api.patch('$kProducts/${product.id}', productToSend.toBackendJson());
+        await _cache.invalidate(CacheKeys.products);
+        debugPrint('[Inventory] updateProduct synced');
+      } catch (e) {
+        debugPrint('[Inventory] updateProduct API failed, encolando: $e');
+        await _enqueueOp(OfflineOpType.updateProduct, productToSend.toBackendJson());
+        _update((st) => st.copyWith(pendingOpsCount: _queue.pendingCount));
+      }
+    }
+
+    _logAudit('Producto Actualizado', 'Product', product.id, product.name, '');
     if (_notificationsEnabled && previous != null) {
       final changes = _describeChanges(previous, product);
       if (changes.isNotEmpty) {
@@ -358,41 +516,48 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     }
   }
 
-  /// Genera una descripción legible de los cambios entre dos versiones del producto.
-  String _describeChanges(Product before, Product after) {
-    final parts = <String>[];
-    if (before.quantity  != after.quantity)  parts.add('Cantidad: \${before.quantity} → \${after.quantity}');
-    if (before.salePrice != after.salePrice) parts.add('Precio: \${before.salePrice.toStringAsFixed(2)} → \${after.salePrice.toStringAsFixed(2)}');
-    if (before.costPrice != after.costPrice) parts.add('Costo: \${before.costPrice.toStringAsFixed(2)} → \${after.costPrice.toStringAsFixed(2)}');
-    if (before.minStock  != after.minStock)  parts.add('Stock mín: \${before.minStock} → \${after.minStock}');
-    if (before.name      != after.name)      parts.add('Nombre: "\${before.name}" → "\${after.name}"');
-    return parts.join(' · ');
-  }
-
   Future<void> deleteProduct(Product product) async {
-    // Guard: a product with an empty id cannot be deleted on the backend.
     if (product.id.isEmpty) {
-      debugPrint('[Inventory] ❌ deleteProduct — product.id is empty, aborting');
       throw Exception('El producto no tiene un ID válido y no puede eliminarse del servidor.');
     }
 
     debugPrint('[Inventory] DELETE $kProducts/${product.id}');
 
-    // Call the backend FIRST. If it fails, the exception propagates to the
-    // caller so the UI can show an error and the local list stays intact.
-    await _api.delete('$kProducts/${product.id}');
+    if (!_connectivity.isOnline) {
+      debugPrint('[Inventory] deleteProduct — OFFLINE, optimistic delete + encolando');
+      await _enqueueOp(OfflineOpType.deleteProduct, {'id': product.id});
+      final s       = state.value!;
+      final updated = s.products.where((p) => p.id != product.id).toList();
+      _update((_) => s.copyWith(
+          products: updated,
+          dashboardStats: _buildStats(updated, s.orders, s.alerts),
+          pendingOpsCount: _queue.pendingCount));
+      await HapticManager.success();
+    } else {
+      try {
+        await _api.delete('$kProducts/${product.id}');
+        await _cache.invalidate(CacheKeys.products);
+        debugPrint('[Inventory] deleteProduct synced');
+        final s       = state.value!;
+        final updated = s.products.where((p) => p.id != product.id).toList();
+        _update((_) => s.copyWith(
+            products: updated,
+            dashboardStats: _buildStats(updated, s.orders, s.alerts)));
+        await HapticManager.success();
+      } catch (e) {
+        debugPrint('[Inventory] deleteProduct API failed, encolando: $e');
+        await _enqueueOp(OfflineOpType.deleteProduct, {'id': product.id});
+        final s       = state.value!;
+        final updated = s.products.where((p) => p.id != product.id).toList();
+        _update((_) => s.copyWith(
+            products: updated,
+            dashboardStats: _buildStats(updated, s.orders, s.alerts),
+            pendingOpsCount: _queue.pendingCount));
+        await HapticManager.success();
+      }
+    }
 
-    debugPrint('[Inventory] ✅ deleteProduct synced to backend — removing from local state');
-
-    // Only reach here when the backend confirmed the deletion.
-    final s = state.value!;
-    final updated = s.products.where((p) => p.id != product.id).toList();
-    _update((_) => s.copyWith(
-        products: updated,
-        dashboardStats: _buildStats(updated, s.orders, s.alerts)));
-    await HapticManager.success();
     _logAudit('Producto Eliminado', 'Product', product.id, product.name, '');
-
     if (_notificationsEnabled) {
       await _notif.showProductDeleted(product.name);
     }
@@ -403,13 +568,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     final idx = s.products.indexWhere((p) => p.id == productId);
     if (idx == -1) return;
 
-    await _api.post(kSales, {
-      'productId': productId,
-      'quantity':  quantity,
-      'unitPrice': unitPrice,
-    });
-    debugPrint('[Inventory] ✅ recordSale synced to backend via POST $kSales');
-
+    // Optimistic: ajustar stock localmente de inmediato
     final product = s.products[idx].copyWith(
       quantity:    (s.products[idx].quantity - quantity).clamp(0, 999999),
       lastUpdated: DateTime.now(),
@@ -419,8 +578,27 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     _update((_) => s.copyWith(
         products: updated, alerts: newAlerts,
         dashboardStats: _buildStats(updated, s.orders, newAlerts)));
-    // analyticsProvider ya observa inventoryProvider con ref.watch(),
-    // se reconstruye automáticamente al cambiar el inventario.
+
+    final payload = {
+      'productId': productId,
+      'quantity':  quantity,
+      'unitPrice': unitPrice,
+    };
+
+    if (!_connectivity.isOnline) {
+      debugPrint('[Inventory] recordSale — OFFLINE, encolando');
+      await _enqueueOp(OfflineOpType.recordSale, payload);
+      _update((st) => st.copyWith(pendingOpsCount: _queue.pendingCount));
+    } else {
+      try {
+        await _api.post(kSales, payload);
+        debugPrint('[Inventory] recordSale synced via POST $kSales');
+      } catch (e) {
+        debugPrint('[Inventory] recordSale API failed, encolando: $e');
+        await _enqueueOp(OfflineOpType.recordSale, payload);
+        _update((st) => st.copyWith(pendingOpsCount: _queue.pendingCount));
+      }
+    }
   }
 
   Future<void> restockProduct(String productId, int quantity) async {
@@ -428,9 +606,9 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
       await _api.post(kInventoryMovements, {
         'productId': productId, 'type': 'RESTOCK', 'quantity': quantity,
       });
-      debugPrint('[Inventory] ✅ restockProduct synced to backend');
+      debugPrint('[Inventory] restockProduct synced');
     } catch (e) {
-      debugPrint('[Inventory] ⚠️  restockProduct API failed, updating locally: $e');
+      debugPrint('[Inventory] restockProduct API failed, updating locally: $e');
     }
     final s   = state.value!;
     final idx = s.products.indexWhere((p) => p.id == productId);
@@ -445,8 +623,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
         dashboardStats: _buildStats(updated, s.orders, s.alerts)));
     await HapticManager.success();
     _logAudit('Reabastecimiento', 'Product', productId, product.name,
-        'Cantidad: +\$quantity');
-
+        'Cantidad: +$quantity');
     if (_notificationsEnabled) {
       await _notif.showRestock(product.name, quantity);
     }
@@ -471,7 +648,10 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
   }
 
   Future<void> refreshData() async {
-    debugPrint('[Inventory] Manual refresh triggered');
+    debugPrint('[Inventory] Manual refresh — invalidando caché...');
+    await _cache.invalidateAll([
+      CacheKeys.products, CacheKeys.alerts, CacheKeys.dashboard,
+    ]);
     state = const AsyncLoading();
     state = await AsyncValue.guard(_loadAll);
   }
@@ -488,9 +668,6 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
 
   // ── Private ───────────────────────────────
 
-  // ── Notification helper ──────────────────
-  // Lee el flag del settingsProvider antes de enviar cualquier notificación.
-  // Esto evita acoplar lógica de UI a cada método CRUD.
   bool get _notificationsEnabled {
     try {
       return ref.read(settingsProvider).value?.notificationsEnabled ?? true;
@@ -520,6 +697,16 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     );
   }
 
+  String _describeChanges(Product before, Product after) {
+    final parts = <String>[];
+    if (before.quantity  != after.quantity)  parts.add('Cantidad: ${before.quantity} → ${after.quantity}');
+    if (before.salePrice != after.salePrice) parts.add('Precio: ${before.salePrice.toStringAsFixed(2)} → ${after.salePrice.toStringAsFixed(2)}');
+    if (before.costPrice != after.costPrice) parts.add('Costo: ${before.costPrice.toStringAsFixed(2)} → ${after.costPrice.toStringAsFixed(2)}');
+    if (before.minStock  != after.minStock)  parts.add('Stock mín: ${before.minStock} → ${after.minStock}');
+    if (before.name      != after.name)      parts.add('Nombre: "${before.name}" → "${after.name}"');
+    return parts.join(' · ');
+  }
+
   List<InventoryAlert> _generateAlerts(
       Product product, List<InventoryAlert> current) {
     final alerts = List<InventoryAlert>.from(current);
@@ -538,63 +725,46 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
       }
     }
 
-    // ── Stock bajo ────────────────────────────
     if (product.stockStatus == StockStatus.lowStock) {
       final isNew = !alerts.any(
           (a) => a.productId == product.id && a.type == AlertType.lowStock && !a.isRead);
-      addIfMissing(
-        AlertType.lowStock,
-        'Stock Bajo',
-        '\${product.name} tiene solo \${product.quantity} uds (mín: \${product.minStock})',
-        AlertPriority.high,
-      );
+      addIfMissing(AlertType.lowStock, 'Stock Bajo',
+          '${product.name} tiene solo ${product.quantity} uds (mín: ${product.minStock})',
+          AlertPriority.high);
       if (isNew && _notificationsEnabled) {
         _notif.showInventoryAlert(
           title: '⚠️ Stock Bajo',
-          body: '\${product.name} tiene solo \${product.quantity} uds (mín: \${product.minStock})',
-          productId: product.id,
-          kind: AlertKind.lowStock,
+          body: '${product.name} tiene solo ${product.quantity} uds (mín: ${product.minStock})',
+          productId: product.id, kind: AlertKind.lowStock,
         );
       }
     }
 
-    // ── Agotado ───────────────────────────────
     if (product.stockStatus == StockStatus.outOfStock) {
       final isNew = !alerts.any(
           (a) => a.productId == product.id && a.type == AlertType.outOfStock && !a.isRead);
-      addIfMissing(
-        AlertType.outOfStock,
-        'Producto Agotado',
-        '\${product.name} se ha agotado completamente',
-        AlertPriority.high,
-      );
+      addIfMissing(AlertType.outOfStock, 'Producto Agotado',
+          '${product.name} se ha agotado completamente', AlertPriority.high);
       if (isNew && _notificationsEnabled) {
         _notif.showInventoryAlert(
           title: '🚫 Producto Agotado',
-          body: '\${product.name} se ha agotado completamente',
-          productId: product.id,
-          kind: AlertKind.outOfStock,
+          body: '${product.name} se ha agotado completamente',
+          productId: product.id, kind: AlertKind.outOfStock,
         );
       }
     }
 
-    // ── Por vencer ────────────────────────────
     if (product.isExpiringSoon) {
       final daysLeft = product.expirationDate!.difference(DateTime.now()).inDays;
       final isNew = !alerts.any(
           (a) => a.productId == product.id && a.type == AlertType.expiringSoon && !a.isRead);
-      addIfMissing(
-        AlertType.expiringSoon,
-        'Por Vencer',
-        '\${product.name} vence en \$daysLeft días',
-        AlertPriority.medium,
-      );
+      addIfMissing(AlertType.expiringSoon, 'Por Vencer',
+          '${product.name} vence en $daysLeft días', AlertPriority.medium);
       if (isNew && _notificationsEnabled) {
         _notif.showInventoryAlert(
           title: '⏰ Producto Por Vencer',
-          body: '\${product.name} vence en \$daysLeft días',
-          productId: product.id,
-          kind: AlertKind.expiringSoon,
+          body: '${product.name} vence en $daysLeft días',
+          productId: product.id, kind: AlertKind.expiringSoon,
         );
       }
     }

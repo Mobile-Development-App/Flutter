@@ -74,6 +74,23 @@ enum ProductCategory {
     }
   }
 
+  Color get color {
+    switch (this) {
+      case ProductCategory.beverages:    return const Color(0xFF3B82F6);
+      case ProductCategory.dairy:        return const Color(0xFF60A5FA);
+      case ProductCategory.snacks:       return const Color(0xFFF59E0B);
+      case ProductCategory.cleaning:     return const Color(0xFF10B981);
+      case ProductCategory.personalCare: return const Color(0xFFEC4899);
+      case ProductCategory.grains:       return const Color(0xFFD97706);
+      case ProductCategory.fruits:       return const Color(0xFF22C55E);
+      case ProductCategory.meat:         return const Color(0xFFEF4444);
+      case ProductCategory.bakery:       return const Color(0xFFF97316);
+      case ProductCategory.frozen:       return const Color(0xFF6366F1);
+      case ProductCategory.condiments:   return const Color(0xFFEAB308);
+      case ProductCategory.other:        return const Color(0xFF6B7280);
+    }
+  }
+
   String get value => name;
 
   static ProductCategory fromValue(String value) =>

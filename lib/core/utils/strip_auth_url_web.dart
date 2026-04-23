@@ -7,5 +7,5 @@ void stripPasswordResetFromBrowserUrl() {
   final search = loc.search ?? '';
   final hash = loc.hash ?? '';
   if (!search.contains('oobCode') && !hash.contains('oobCode')) return;
-  html.window.history.replaceState(null, html.document.title ?? '', '/');
+  html.window.history.replaceState(null, html.document.title, '/');
 }

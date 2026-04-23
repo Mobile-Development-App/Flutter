@@ -43,7 +43,7 @@ Map<String, dynamic> _productToMap(Product p) => {
       'category': p.category.label,
       'stockStatus': p.stockStatus.name,
       'expirationDate': p.expirationDate?.toIso8601String(),
-      'lastUpdated': p.lastUpdated?.toIso8601String(),
+      'lastUpdated': p.lastUpdated.toIso8601String(),
       'isActive': p.isActive,
       'quantity': p.quantity,
       'profitMargin': p.profitMargin,
@@ -438,7 +438,7 @@ class DataProcessingService {
             p.isActive &&
             p.quantity > 0 &&
             !recentlyAlerted.contains(p.id) &&
-            (p.lastUpdated?.isBefore(cutoff) ?? false))
+            p.lastUpdated.isBefore(cutoff))
         .toList();
     sw.stop();
     _logger.log(

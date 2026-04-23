@@ -186,35 +186,32 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
 
   @override
   Future<AnalyticsState> build() async {
-    final sw = Stopwatch()..start();
     final invState     = ref.watch(inventoryProvider).value;
     final products     = invState?.products ?? [];
     final currentRange = state.valueOrNull?.selectedTimeRange ?? TimeRange.week;
 
-    final sales       = await _fetchSalesFromFirestore(currentRange);
-    final stockResult = _processing.aggregateStockByCategory(products);
-    final catResult   = _processing.aggregateCategoryDistribution(products);
+    // Red + dos Isolates en paralelo: compute() libera el hilo UI mientras
+    // las agregaciones corren en un Isolate separado.
+    final results = await Future.wait([
+      _fetchSalesFromFirestore(currentRange),
+      _processing.aggregateStockByCategoryAsync(products),
+      _processing.aggregateCategoryDistributionAsync(products),
+    ]);
 
-    debugPrint('[Analytics] build() — sales=${sales.length} '
+    final sales       = results[0] as List<SalesDataPoint>;
+    final stockResult = results[1] as AggregationResult<List<StockLevelData>>;
+    final catResult   = results[2] as AggregationResult<List<CategoryDistribution>>;
+
+    debugPrint('[Analytics] build() [isolates] — sales=${sales.length} '
         'stock=${stockResult.data.length} cat=${catResult.data.length}');
 
-    final result = AnalyticsState(
+    return AnalyticsState(
       selectedTimeRange:    currentRange,
       salesData:            sales,
       stockLevelData:       stockResult.data,
       categoryDistribution: catResult.data,
       pipelineMetrics:      _pipeline.summary,
     );
-
-    sw.stop();
-    _pipeline.log(
-      stage: PipelineStage.computation,
-      operation: 'AnalyticsNotifier.build',
-      recordCount: result.salesData.length + result.stockLevelData.length + result.categoryDistribution.length,
-      latency: sw.elapsed,
-    );
-
-    return result;
   }
 
   // ─────────────────────────────────────────────
@@ -394,14 +391,20 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
   // ── Actions ───────────────────────────────
 
   Future<void> loadData(TimeRange range) async {
-    final sw = Stopwatch()..start();
     _update((s) => s.copyWith(isLoading: true, selectedTimeRange: range));
     final invState = ref.read(inventoryProvider).value;
     final products = invState?.products ?? [];
 
-    final sales       = await _fetchSalesFromFirestore(range);
-    final stockResult = _processing.aggregateStockByCategory(products);
-    final catResult   = _processing.aggregateCategoryDistribution(products);
+    // Red + dos Isolates en paralelo — el await más largo marca el tiempo total.
+    final results = await Future.wait([
+      _fetchSalesFromFirestore(range),
+      _processing.aggregateStockByCategoryAsync(products),
+      _processing.aggregateCategoryDistributionAsync(products),
+    ]);
+
+    final sales       = results[0] as List<SalesDataPoint>;
+    final stockResult = results[1] as AggregationResult<List<StockLevelData>>;
+    final catResult   = results[2] as AggregationResult<List<CategoryDistribution>>;
 
     _update((s) => s.copyWith(
       isLoading:            false,
@@ -411,26 +414,27 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       categoryDistribution: catResult.data,
       pipelineMetrics:      _pipeline.summary,
     ));
-    sw.stop();
-    _pipeline.log(
-      stage: PipelineStage.computation,
-      operation: 'AnalyticsNotifier.loadData',
-      recordCount: sales.length + stockResult.data.length + catResult.data.length,
-      latency: sw.elapsed,
-    );
   }
 
   Future<void> refreshAll() async {
-    final sw = Stopwatch()..start();
     debugPrint('[Analytics] Manual refresh');
     final range = state.valueOrNull?.selectedTimeRange ?? TimeRange.week;
     state = const AsyncLoading();
     final invState = ref.read(inventoryProvider).value;
     final products = invState?.products ?? [];
-    final sales       = await _fetchSalesFromFirestore(range);
-    final stockResult = _processing.aggregateStockByCategory(products);
-    final catResult   = _processing.aggregateCategoryDistribution(products);
-    debugPrint('[Analytics] refreshAll → sales=${sales.length}');
+
+    // Misma estrategia de paralelismo que loadData.
+    final results = await Future.wait([
+      _fetchSalesFromFirestore(range),
+      _processing.aggregateStockByCategoryAsync(products),
+      _processing.aggregateCategoryDistributionAsync(products),
+    ]);
+
+    final sales       = results[0] as List<SalesDataPoint>;
+    final stockResult = results[1] as AggregationResult<List<StockLevelData>>;
+    final catResult   = results[2] as AggregationResult<List<CategoryDistribution>>;
+
+    debugPrint('[Analytics] refreshAll [isolates] → sales=${sales.length}');
     state = AsyncData(AnalyticsState(
       selectedTimeRange:    range,
       salesData:            sales,
@@ -438,13 +442,6 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       categoryDistribution: catResult.data,
       pipelineMetrics:      _pipeline.summary,
     ));
-    sw.stop();
-    _pipeline.log(
-      stage: PipelineStage.computation,
-      operation: 'AnalyticsNotifier.refreshAll',
-      recordCount: sales.length + stockResult.data.length + catResult.data.length,
-      latency: sw.elapsed,
-    );
   }
 
   Future<void> exportReport() async {

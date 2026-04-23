@@ -195,15 +195,14 @@ class _TabScaffold extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final Widget child;
-  final EdgeInsets? padding;
 
-  const _SectionCard({required this.child, this.padding});
+  const _SectionCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
     return Container(
-      padding: padding ?? const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: cardDecoration(isDark: isDark),
       child: child,
     );
@@ -877,7 +876,7 @@ class _BQ7Tab extends ConsumerWidget {
               (i) => i.method == 'manual',
               orElse: () => ScanAccuracyInsight(method: 'manual', total: 0, accurate: 0));
 
-          final barcodeColor = const Color(0xFF8B5CF6);
+          const barcodeColor = Color(0xFF8B5CF6);
           const manualColor = AppColors.warning;
 
           final diff = ((barcode.accuracyRate - manual.accuracyRate) * 100).abs();

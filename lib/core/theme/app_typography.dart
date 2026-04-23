@@ -60,6 +60,8 @@ abstract final class AppTypography {
     height: 1.5,
   );
 
+  static const TextStyle bodyMedium = callout;
+
   static const TextStyle callout = TextStyle(
     fontFamily: _font,
     fontSize: 14,

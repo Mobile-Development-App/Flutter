@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../models/user.dart';
 import '../../providers/providers.dart';
+import '../../widgets/protected_route.dart';  // ← Sprint 4: rutas protegidas
 import '../home/home_screen.dart';
 import '../products/products_screen.dart';
 import '../restock/restock_screen.dart';
@@ -20,12 +22,26 @@ class MainTabView extends ConsumerStatefulWidget {
 class _MainTabViewState extends ConsumerState<MainTabView> {
   int _selectedIndex = 0;
 
+  // ── Pantallas del IndexedStack ────────────────────────────────────────────
+  //
+  // AnalyticsScreen está envuelta en ProtectedRoute con roles owner + manager.
+  // Si el usuario es employee o viewer, ve _AccessDeniedScreen en lugar de
+  // la analítica — sin push/pop, puramente declarativo.
+  //
+  // Para proteger otras pantallas basta con envolverlas igual:
+  //   ProtectedRoute(allowedRoles: {UserRole.owner}, child: AdminScreen())
   static const _screens = [
     HomeScreen(),
     ProductsScreen(),
-    SizedBox.shrink(),
+    SizedBox.shrink(), // índice 2 → ScanScreen (se abre como modal)
     RestockScreen(),
-    AnalyticsScreen(),
+    ProtectedRoute(                          // ← Vista protegida por rol
+      allowedRoles: {UserRole.owner, UserRole.manager},
+      accessDeniedTitle: 'Analítica restringida',
+      accessDeniedSubtitle:
+          'Solo propietarios y gerentes pueden ver los reportes de analítica.',
+      child: AnalyticsScreen(),
+    ),
   ];
 
   static const _tabs = [

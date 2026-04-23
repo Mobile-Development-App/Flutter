@@ -6,15 +6,9 @@ import '../core/constants/api_constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/bq_cache_service.dart';
-import '../services/connectivity_service.dart';
 import '../services/usage_tracking_service.dart';
+import 'connectivity_provider.dart'; // ← connectivityProvider vive aquí (Sprint 4)
 import 'inventory_provider.dart';
-
-final connectivityProvider = StreamProvider<bool>((ref) async* {
-  await ConnectivityService.shared.init();
-  yield ConnectivityService.shared.isOnline;
-  yield* ConnectivityService.shared.onStatusChanged;
-});
 
 class BQ3ProductInsight {
   final String productId;

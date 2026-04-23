@@ -9,7 +9,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../models/analytics_data.dart';
 import '../../models/product.dart';
-import '../../providers/analytics_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
 import '../../services/usage_tracking_service.dart';
@@ -105,11 +104,6 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           final averageDaily = hasSales ? (analyticsState?.averageDailySales ?? 0.0) : null;
           final totalOrders = hasSales ? (analyticsState?.totalOrders ?? 0) : null;
 
-          final totalStockValue =
-              products.fold<double>(0, (sum, p) => sum + p.stockValue);
-          final totalUnits =
-              products.fold<int>(0, (sum, p) => sum + p.quantity);
-
           final salesSpots = _buildSalesTrend(salesData);
           final stockBars = _buildStockBarData(products);
           final categorySections = _buildCategorySections(products);
@@ -161,7 +155,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                             ? _compactCurrency(averageDaily)
                             : '—',
                         title: 'Promedio Diario',
-                        subtitle: '${_selectedDays} días',
+                        subtitle: '$_selectedDays días',
                         subtitleColor: AppColors.textSecondary,
                       ),
                     ),

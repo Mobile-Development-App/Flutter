@@ -64,7 +64,7 @@ class BQ1Notifier extends AsyncNotifier<BQ1State> {
       return const BQ1State(isLoading: false);
     }
 
-    Duration _avg(PipelineStage stage) {
+    Duration avg(PipelineStage stage) {
       final matching =
           records.where((r) => r.stage == stage && r.latency != Duration.zero);
       if (matching.isEmpty) return Duration.zero;
@@ -73,10 +73,10 @@ class BQ1Notifier extends AsyncNotifier<BQ1State> {
       return Duration(microseconds: total ~/ matching.length);
     }
 
-    final ingestion = _avg(PipelineStage.ingestion);
-    final storage = _avg(PipelineStage.storage);
-    final processing = _avg(PipelineStage.processing);
-    final computation = _avg(PipelineStage.computation);
+    final ingestion = avg(PipelineStage.ingestion);
+    final storage = avg(PipelineStage.storage);
+    final processing = avg(PipelineStage.processing);
+    final computation = avg(PipelineStage.computation);
 
     // Persist to SQLite for cross-session aggregation (BQ1 + local storage)
     final svc = UsageTrackingService.shared;

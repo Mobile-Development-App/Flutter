@@ -270,7 +270,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppColors.teaGreen,
+            activeThumbColor: AppColors.teaGreen,
           ),
         ],
       ),

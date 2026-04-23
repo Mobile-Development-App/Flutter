@@ -7,3 +7,4 @@ export 'product_card.dart';
 export 'product_card_restock_days_v2.dart';
 export 'search_bar.dart';
 export 'stat_card.dart';
+export 'protected_route.dart';

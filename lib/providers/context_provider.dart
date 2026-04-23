@@ -4,6 +4,7 @@ import '../models/alert.dart';
 import '../models/product.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/pipeline_logger.dart';
 
 // ─────────────────────────────────────────────
 // InventoryHealthScore  (0-100)
@@ -171,13 +172,23 @@ class ContextState {
 class ContextNotifier extends Notifier<ContextState> {
   @override
   ContextState build() {
+    final sw = Stopwatch()..start();
     final invAsync  = ref.watch(inventoryProvider);
     final authAsync = ref.watch(authProvider);
 
     final inv  = invAsync.value;
     final auth = authAsync.value;
 
-    if (inv == null) return ContextState.empty();
+    if (inv == null) {
+      sw.stop();
+      PipelineLogger.shared.log(
+        stage: PipelineStage.computation,
+        operation: 'ContextNotifier.build(empty)',
+        recordCount: 0,
+        latency: sw.elapsed,
+      );
+      return ContextState.empty();
+    }
 
     final products     = inv.products;
     final alerts       = inv.alerts;
@@ -206,7 +217,7 @@ class ContextNotifier extends Notifier<ContextState> {
             .clamp(0, 100)
             .toDouble();
 
-    return ContextState(
+    final result = ContextState(
       healthScore:       health,
       insights:          _buildInsights(products, critical, warning, expiring, urgent, stats),
       greetingMessage:   _greeting(firstName, health),
@@ -218,6 +229,16 @@ class ContextNotifier extends Notifier<ContextState> {
       hasUrgentAction:   critical.isNotEmpty || urgent.isNotEmpty,
       stockHealthPercent: stockHealthPercent,
     );
+
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage: PipelineStage.computation,
+      operation: 'ContextNotifier.build',
+      recordCount: result.insights.length,
+      latency: sw.elapsed,
+    );
+
+    return result;
   }
 
   // ── Greeting ──────────────────────────────

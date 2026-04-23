@@ -395,6 +395,7 @@ class _BQ1Tab extends ConsumerWidget {
             state.avgProcessingMs,
             state.avgComputationMs,
           ];
+          final totalLatencyMs = values.fold<double>(0, (sum, value) => sum + value);
           final maxMs = values.reduce((a, b) => a > b ? a : b).clamp(1, double.infinity);
 
           return Column(
@@ -414,7 +415,7 @@ class _BQ1Tab extends ConsumerWidget {
                   Expanded(
                     child: _MetricTile(
                       label: 'Latencia total',
-                      value: '${(state.avgIngestionMs + state.avgStorageMs).toStringAsFixed(0)} ms',
+                      value: '${totalLatencyMs.toStringAsFixed(0)} ms',
                       icon: Icons.timeline_rounded,
                       color: AppColors.success,
                     ),
@@ -450,8 +451,8 @@ class _BQ1Tab extends ConsumerWidget {
               _InsightBanner(
                 icon: Icons.info_outline_rounded,
                 color: AppColors.freshSky,
-                text: 'La etapa de ingesta incluye la llamada HTTP al backend. '
-                    'Latencias < 200 ms son óptimas para esta arquitectura.',
+                text: 'La vista combina telemetría real de HTTP, caché/persistencia local, '
+                    'procesamiento y cómputo reactivo para cada etapa del flujo.',
               ),
             ],
           );

@@ -78,26 +78,32 @@ class BQ1Notifier extends AsyncNotifier<BQ1State> {
     final processing = calcAvg(PipelineStage.processing);
     final computation = calcAvg(PipelineStage.computation);
 
-    // Persist to Hive for cross-session aggregation (BQ1 + local storage)
     final svc = UsageTrackingService.shared;
-    if (ingestion != Duration.zero) {
-      await svc.persistLatencyRecord(
-          stage: 'ingestion',
-          latencyMs: ingestion.inMilliseconds,
-          success: true);
-    }
-    if (storage != Duration.zero) {
-      await svc.persistLatencyRecord(
-          stage: 'storage',
-          latencyMs: storage.inMilliseconds,
-          success: true);
+    final stageLatencies = <String, Duration>{
+      'ingestion': ingestion,
+      'storage': storage,
+      'processing': processing,
+      'computation': computation,
+    };
+
+    for (final entry in stageLatencies.entries) {
+      if (entry.value != Duration.zero) {
+        await svc.persistLatencyRecord(
+          stage: entry.key,
+          latencyMs: entry.value.inMilliseconds,
+          success: true,
+        );
+      }
     }
 
-    // Cross-session averages from SQLite
     final crossSessionIngestion =
         await svc.getAverageLatencyMs(stage: 'ingestion');
     final crossSessionStorage =
         await svc.getAverageLatencyMs(stage: 'storage');
+    final crossSessionProcessing =
+        await svc.getAverageLatencyMs(stage: 'processing');
+    final crossSessionComputation =
+        await svc.getAverageLatencyMs(stage: 'computation');
 
     return BQ1State(
       avgIngestionMs: crossSessionIngestion > 0
@@ -106,8 +112,12 @@ class BQ1Notifier extends AsyncNotifier<BQ1State> {
       avgStorageMs: crossSessionStorage > 0
           ? crossSessionStorage
           : storage.inMilliseconds.toDouble(),
-      avgProcessingMs: processing.inMilliseconds.toDouble(),
-      avgComputationMs: computation.inMilliseconds.toDouble(),
+      avgProcessingMs: crossSessionProcessing > 0
+          ? crossSessionProcessing
+          : processing.inMilliseconds.toDouble(),
+      avgComputationMs: crossSessionComputation > 0
+          ? crossSessionComputation
+          : computation.inMilliseconds.toDouble(),
       totalRecords: records.length,
       isLoading: false,
     );

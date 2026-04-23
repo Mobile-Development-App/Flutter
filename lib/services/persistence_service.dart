@@ -128,18 +128,20 @@ class PersistenceService {
   // ── Audit log ──────────────────────────────
 
   Future<void> logAuditEvent(AuditEvent event) async {
+    final sw = Stopwatch()..start();
     final events = await _loadList(_kAuditLog, AuditEvent.fromJson);
     events.add(event);
     final trimmed = events.length > 1000
         ? events.sublist(events.length - 1000)
         : events;
     await _saveList(_kAuditLog, trimmed, (e) => e.toJson());
+    sw.stop();
     // STORAGE layer — local SharedPreferences write (offline-first)
     PipelineLogger.shared.log(
       stage:       PipelineStage.storage,
       operation:   'logAuditEvent → SharedPreferences [local]',
       recordCount: trimmed.length,
-      latency:     Duration.zero,
+      latency:     sw.elapsed,
     );
   }
 

@@ -186,6 +186,7 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
 
   @override
   Future<AnalyticsState> build() async {
+    final sw = Stopwatch()..start();
     final invState     = ref.watch(inventoryProvider).value;
     final products     = invState?.products ?? [];
     final currentRange = state.valueOrNull?.selectedTimeRange ?? TimeRange.week;
@@ -197,13 +198,23 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
     debugPrint('[Analytics] build() — sales=${sales.length} '
         'stock=${stockResult.data.length} cat=${catResult.data.length}');
 
-    return AnalyticsState(
+    final result = AnalyticsState(
       selectedTimeRange:    currentRange,
       salesData:            sales,
       stockLevelData:       stockResult.data,
       categoryDistribution: catResult.data,
       pipelineMetrics:      _pipeline.summary,
     );
+
+    sw.stop();
+    _pipeline.log(
+      stage: PipelineStage.computation,
+      operation: 'AnalyticsNotifier.build',
+      recordCount: result.salesData.length + result.stockLevelData.length + result.categoryDistribution.length,
+      latency: sw.elapsed,
+    );
+
+    return result;
   }
 
   // ─────────────────────────────────────────────
@@ -383,6 +394,7 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
   // ── Actions ───────────────────────────────
 
   Future<void> loadData(TimeRange range) async {
+    final sw = Stopwatch()..start();
     _update((s) => s.copyWith(isLoading: true, selectedTimeRange: range));
     final invState = ref.read(inventoryProvider).value;
     final products = invState?.products ?? [];
@@ -399,9 +411,17 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       categoryDistribution: catResult.data,
       pipelineMetrics:      _pipeline.summary,
     ));
+    sw.stop();
+    _pipeline.log(
+      stage: PipelineStage.computation,
+      operation: 'AnalyticsNotifier.loadData',
+      recordCount: sales.length + stockResult.data.length + catResult.data.length,
+      latency: sw.elapsed,
+    );
   }
 
   Future<void> refreshAll() async {
+    final sw = Stopwatch()..start();
     debugPrint('[Analytics] Manual refresh');
     final range = state.valueOrNull?.selectedTimeRange ?? TimeRange.week;
     state = const AsyncLoading();
@@ -418,6 +438,13 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       categoryDistribution: catResult.data,
       pipelineMetrics:      _pipeline.summary,
     ));
+    sw.stop();
+    _pipeline.log(
+      stage: PipelineStage.computation,
+      operation: 'AnalyticsNotifier.refreshAll',
+      recordCount: sales.length + stockResult.data.length + catResult.data.length,
+      latency: sw.elapsed,
+    );
   }
 
   Future<void> exportReport() async {

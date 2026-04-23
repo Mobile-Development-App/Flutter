@@ -14,6 +14,7 @@ import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
 import '../../services/usage_tracking_service.dart';
 import 'usage_insights_screen.dart';
+import 'business_questions_screen.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -54,6 +55,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       appBar: AppBar(
         title: const Text('Analítica'),
         actions: [
+          // Sprint 4 — acceso directo a BQ3 · BQ4 · BQ6
+          IconButton(
+            icon: const Icon(Icons.quiz_rounded),
+            tooltip: 'Business Questions',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const BusinessQuestionsScreen(),
+              ),
+            ),
+          ),
           // Sprint 3 — acceso directo a BQ1 · BQ5 · BQ7 · BQ8
           IconButton(
             icon: const Icon(Icons.insights_rounded),

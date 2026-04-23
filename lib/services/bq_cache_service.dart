@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'pipeline_logger.dart';
+
 class BQCacheService {
   BQCacheService._();
   static final BQCacheService shared = BQCacheService._();
@@ -19,13 +21,30 @@ class BQCacheService {
       'expiresAt': expiresAt,
       'payload': payload,
     };
+    final sw = Stopwatch()..start();
     await prefs.setString('$_prefix$key', jsonEncode(data));
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage: PipelineStage.storage,
+      operation: 'SharedPreferences.save($_prefix$key)',
+      recordCount: 1,
+      latency: sw.elapsed,
+    );
   }
 
   Future<Map<String, dynamic>?> read(String key) async {
     final prefs = await SharedPreferences.getInstance();
+    final sw = Stopwatch()..start();
     final raw = prefs.getString('$_prefix$key');
+    sw.stop();
     if (raw == null || raw.isEmpty) return null;
+
+    PipelineLogger.shared.log(
+      stage: PipelineStage.storage,
+      operation: 'SharedPreferences.read($_prefix$key)',
+      recordCount: 1,
+      latency: sw.elapsed,
+    );
 
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;

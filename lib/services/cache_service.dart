@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'pipeline_logger.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CacheService — Sprint 4 (Caching Strategy)
 //
@@ -107,7 +109,15 @@ class CacheService {
       cachedAt: DateTime.now(),
       ttl: effectiveTtl,
     );
+    final sw = Stopwatch()..start();
     await _box.put(key, entry.toJson());
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage: PipelineStage.storage,
+      operation: 'Hive.put($key)',
+      recordCount: 1,
+      latency: sw.elapsed,
+    );
     debugPrint('[Cache] put  key=$key  ttl=${effectiveTtl.inMinutes}min');
   }
 
@@ -121,11 +131,20 @@ class CacheService {
   /// (útil como fallback de último recurso cuando la red no está disponible).
   dynamic get(String key, {bool allowStale = false}) {
     _assertInit();
+    final sw = Stopwatch()..start();
     final raw = _box.get(key);
+    sw.stop();
     if (raw == null) {
       debugPrint('[Cache] MISS  key=$key');
       return null;
     }
+
+    PipelineLogger.shared.log(
+      stage: PipelineStage.storage,
+      operation: 'Hive.get($key)',
+      recordCount: 1,
+      latency: sw.elapsed,
+    );
 
     final entry = _CacheEntry.fromJson(raw);
 
@@ -148,21 +167,45 @@ class CacheService {
   /// Elimina la entrada de [key] (útil tras operaciones de escritura exitosas).
   Future<void> invalidate(String key) async {
     _assertInit();
+    final sw = Stopwatch()..start();
     await _box.delete(key);
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage: PipelineStage.storage,
+      operation: 'Hive.delete($key)',
+      recordCount: 1,
+      latency: sw.elapsed,
+    );
     debugPrint('[Cache] invalidate  key=$key');
   }
 
   /// Invalida múltiples claves a la vez.
   Future<void> invalidateAll(List<String> keys) async {
     _assertInit();
+    final sw = Stopwatch()..start();
     await _box.deleteAll(keys);
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage: PipelineStage.storage,
+      operation: 'Hive.deleteAll(${keys.length})',
+      recordCount: keys.length,
+      latency: sw.elapsed,
+    );
     debugPrint('[Cache] invalidateAll  keys=$keys');
   }
 
   /// Elimina todas las entradas (útil al cerrar sesión o cambiar de tienda).
   Future<void> clearAll() async {
     _assertInit();
+    final sw = Stopwatch()..start();
     await _box.clear();
+    sw.stop();
+    PipelineLogger.shared.log(
+      stage: PipelineStage.storage,
+      operation: 'Hive.clear()',
+      recordCount: 0,
+      latency: sw.elapsed,
+    );
     debugPrint('[Cache] clearAll');
   }
 

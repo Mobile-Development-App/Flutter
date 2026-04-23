@@ -17,6 +17,8 @@ import 'package:flutter/foundation.dart';
 //   • onConnectivityChanged: Stream<bool> — emite true al conectarse,
 //     false al desconectarse.  Usa StreamController.broadcast() para que
 //     múltiples listeners puedan suscribirse (provider + queue service).
+//   • onStatusChanged: alias de onConnectivityChanged mantenido por
+//     compatibilidad con código Sprint 3 (business_questions_provider).
 //
 // NOTA: connectivity_plus puede reportar "connected" aunque el host real no sea
 // alcanzable (red sin internet). Para este MVP consideramos la presencia de una
@@ -34,12 +36,16 @@ class ConnectivityService {
 
   /// Estado actual de conectividad (snapshot sincrónico).
   bool _isOnline = true;
+
   bool get isOnline => _isOnline;
 
   /// Stream de transiciones: `true` = online, `false` = offline.
   Stream<bool> get onConnectivityChanged => _controller.stream;
 
-  /// Inicializa el servicio.  Debe llamarse en main() antes de runApp().
+  /// Alias mantenido por compatibilidad con código Sprint 3.
+  Stream<bool> get onStatusChanged => _controller.stream;
+
+  /// Inicializa el servicio. Debe llamarse en main() antes de runApp().
   Future<void> init() async {
     // Evaluar estado inicial antes de suscribirse al stream.
     final initial = await _connectivity.checkConnectivity();
@@ -72,7 +78,7 @@ class ConnectivityService {
   bool _isConnected(List<ConnectivityResult> results) {
     return results.any((r) =>
         r == ConnectivityResult.mobile ||
-        r == ConnectivityResult.wifi    ||
+        r == ConnectivityResult.wifi ||
         r == ConnectivityResult.ethernet ||
         r == ConnectivityResult.vpn);
   }

@@ -13,6 +13,7 @@ import '../services/offline_queue_service.dart';
 import '../services/persistence_service.dart';
 import '../core/utils/extensions.dart';
 import '../services/notification_service.dart';
+import '../services/usage_tracking_service.dart'; // BQ6 — tracking de correcciones e inventario automático
 import 'settings_provider.dart';
 
 // ─────────────────────────────────────────────
@@ -508,6 +509,17 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     }
 
     _logAudit('Producto Actualizado', 'Product', product.id, product.name, '');
+
+    // BQ6 — registrar corrección manual si cambió el stock
+    if (previous != null && previous.quantity != product.quantity) {
+      await UsageTrackingService.shared.trackManualInventoryCorrection(
+        productId: product.id,
+        productName: product.name,
+        previousQuantity: previous.quantity,
+        newQuantity: product.quantity,
+      );
+    }
+
     if (_notificationsEnabled && previous != null) {
       final changes = _describeChanges(previous, product);
       if (changes.isNotEmpty) {
@@ -599,6 +611,15 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
         _update((st) => st.copyWith(pendingOpsCount: _queue.pendingCount));
       }
     }
+
+    // BQ6 — registrar actualización automática por venta
+    await UsageTrackingService.shared.trackAutoInventoryUpdate(
+      productId: product.id,
+      productName: product.name,
+      source: 'sale',
+      previousQuantity: s.products[idx].quantity,
+      newQuantity: product.quantity,
+    );
   }
 
   Future<void> restockProduct(String productId, int quantity) async {
@@ -621,6 +642,16 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     _update((_) => s.copyWith(
         products: updated,
         dashboardStats: _buildStats(updated, s.orders, s.alerts)));
+
+    // BQ6 — registrar actualización automática por reabastecimiento
+    await UsageTrackingService.shared.trackAutoInventoryUpdate(
+      productId: product.id,
+      productName: product.name,
+      source: 'restock',
+      previousQuantity: s.products[idx].quantity,
+      newQuantity: product.quantity,
+    );
+
     await HapticManager.success();
     _logAudit('Reabastecimiento', 'Product', productId, product.name,
         'Cantidad: +$quantity');

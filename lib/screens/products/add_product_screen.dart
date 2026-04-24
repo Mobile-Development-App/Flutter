@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
@@ -62,6 +65,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   bool _hasExpiration = false;
   bool _showSuccess   = false;
   bool _imageError    = false;
+  double? _selectedLatitude;
+  double? _selectedLongitude;
 
   bool get _isEditing => widget.editingProduct != null;
 
@@ -133,7 +138,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     _saleCtrl.text      = p.salePrice.toStringAsFixed(2);
     _qtyCtrl.text       = '${p.quantity}';
     _minStockCtrl.text  = '${p.minStock}';
-    _locationCtrl.text  = p.location;
+    _locationCtrl.text  = _stripCoordinatesFromLocation(p.location);
+    final coordinates = _extractCoordinates(p.location);
+    if (coordinates != null) {
+      _selectedLatitude = coordinates.$1;
+      _selectedLongitude = coordinates.$2;
+    }
     _descCtrl.text      = p.description;
     _imageUrlCtrl.text  = p.imageURL ?? '';
     _category           = p.category;
@@ -392,6 +402,30 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 'Ej: Pasillo 3, Estante A',
                 isDark,
               ),
+              OutlinedButton.icon(
+                onPressed: _openLocationPicker,
+                icon: const Icon(Icons.place_rounded),
+                label: Text(
+                  _selectedLatitude == null
+                      ? 'Agregar mi ubicación'
+                      : 'Editar ubicación en mapa',
+                ),
+              ),
+              if (_selectedLatitude != null && _selectedLongitude != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.deepSpaceBlue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Lat: ${_selectedLatitude!.toStringAsFixed(6)}  |  Lng: ${_selectedLongitude!.toStringAsFixed(6)}',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.deepSpaceBlue,
+                    ),
+                  ),
+                ),
               SwitchListTile(
                 value: _hasExpiration,
                 onChanged: (v) => setState(() => _hasExpiration = v),
@@ -870,6 +904,9 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final qty      = int.parse(_qtyCtrl.text.trim());
     final minStock = int.parse(_minStockCtrl.text.trim());
 
+    final baseLocation = _locationCtrl.text.trim();
+    final locationWithCoordinates = _buildLocationValue(baseLocation);
+
     final product = Product(
       id: widget.editingProduct?.id ?? const Uuid().v4(),
       name:      _nameCtrl.text.trim(),
@@ -881,7 +918,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       salePrice: sale,
       quantity:  qty,
       minStock:  minStock,
-      location:  _locationCtrl.text.trim(),
+      location:  locationWithCoordinates,
       expirationDate: _hasExpiration ? _expirationDate : null,
       description: _descCtrl.text.trim(),
       imageURL:    _imageUrl,
@@ -906,5 +943,273 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     }
 
     setState(() => _showSuccess = true);
+  }
+
+  Future<void> _openLocationPicker() async {
+    final selected = await Navigator.push<_PickedLocationResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _LocationPickerScreen(
+          initialLatitude: _selectedLatitude,
+          initialLongitude: _selectedLongitude,
+        ),
+      ),
+    );
+
+    if (selected == null) return;
+
+    setState(() {
+      _selectedLatitude = selected.latitude;
+      _selectedLongitude = selected.longitude;
+    });
+  }
+
+  String _buildLocationValue(String baseLocation) {
+    if (_selectedLatitude == null || _selectedLongitude == null) {
+      return _stripCoordinatesFromLocation(baseLocation);
+    }
+
+    final cleanBaseLocation = _stripCoordinatesFromLocation(baseLocation);
+    final coordinatesText =
+        'GPS:${_selectedLatitude!.toStringAsFixed(6)},${_selectedLongitude!.toStringAsFixed(6)}';
+
+    if (cleanBaseLocation.isEmpty) return coordinatesText;
+    return '$cleanBaseLocation $coordinatesText';
+  }
+
+  (double, double)? _extractCoordinates(String location) {
+    final gpsMatch = RegExp(
+      r'GPS:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    ).firstMatch(location);
+    if (gpsMatch != null) {
+      final lat = double.tryParse(gpsMatch.group(1) ?? '');
+      final lng = double.tryParse(gpsMatch.group(2) ?? '');
+      if (lat == null || lng == null) return null;
+      return (lat, lng);
+    }
+
+    final legacyMatch = RegExp(
+      r'Lat:\s*(-?\d+(?:\.\d+)?)\s*,\s*Lng:\s*(-?\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    ).firstMatch(location);
+
+    if (legacyMatch == null) return null;
+    final lat = double.tryParse(legacyMatch.group(1) ?? '');
+    final lng = double.tryParse(legacyMatch.group(2) ?? '');
+    if (lat == null || lng == null) return null;
+    return (lat, lng);
+  }
+
+  String _stripCoordinatesFromLocation(String location) {
+    var clean = location.trim();
+    clean = clean.replaceAll(
+      RegExp(
+        r'GPS:\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    clean = clean.replaceAll(
+      RegExp(
+        r'Lat:\s*-?\d+(?:\.\d+)?\s*,\s*Lng:\s*-?\d+(?:\.\d+)?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    return clean.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+}
+
+class _PickedLocationResult {
+  final double latitude;
+  final double longitude;
+
+  const _PickedLocationResult({
+    required this.latitude,
+    required this.longitude,
+  });
+}
+
+class _LocationPickerScreen extends StatefulWidget {
+  final double? initialLatitude;
+  final double? initialLongitude;
+
+  const _LocationPickerScreen({
+    required this.initialLatitude,
+    required this.initialLongitude,
+  });
+
+  @override
+  State<_LocationPickerScreen> createState() => _LocationPickerScreenState();
+}
+
+class _LocationPickerScreenState extends State<_LocationPickerScreen> {
+  static const LatLng _fallbackPoint = LatLng(4.60971, -74.08175);
+  late final MapController _mapController;
+  late LatLng _selectedPoint;
+  bool _loadingLocation = true;
+  String? _locationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+    _selectedPoint = (widget.initialLatitude != null &&
+            widget.initialLongitude != null)
+        ? LatLng(widget.initialLatitude!, widget.initialLongitude!)
+        : _fallbackPoint;
+    _resolveInitialPosition();
+  }
+
+  Future<void> _resolveInitialPosition() async {
+    if (widget.initialLatitude != null && widget.initialLongitude != null) {
+      setState(() => _loadingLocation = false);
+      return;
+    }
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        _loadingLocation = false;
+        _locationError = 'Activa el GPS para usar tu ubicación actual.';
+      });
+      return;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      setState(() {
+        _loadingLocation = false;
+        _locationError = 'No hay permiso de ubicación. Puedes mover el mapa manualmente.';
+      });
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      final userPoint = LatLng(position.latitude, position.longitude);
+
+      if (!mounted) return;
+      setState(() {
+        _selectedPoint = userPoint;
+        _loadingLocation = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _mapController.move(userPoint, 16);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingLocation = false;
+        _locationError = 'No se pudo obtener GPS. Puedes seleccionar el punto manualmente.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Seleccionar ubicación'),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _selectedPoint,
+                    initialZoom: 16,
+                    onTap: (_, tappedPoint) {
+                      setState(() => _selectedPoint = tappedPoint);
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      // Estilo tipo Google: más contraste suave y calles en tonos grises.
+                      urlTemplate:
+                          'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                      subdomains: const ['a', 'b', 'c', 'd'],
+                      userAgentPackageName: 'com.inventaria.app',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _selectedPoint,
+                          width: 46,
+                          height: 46,
+                          child: const Icon(
+                            Icons.location_pin,
+                            size: 46,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (_loadingLocation)
+                  const Center(child: CircularProgressIndicator()),
+              ],
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_locationError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      _locationError!,
+                      style: const TextStyle(color: AppColors.warning),
+                    ),
+                  ),
+                const Text(
+                  'Tip: toca el mapa para mover el pin. Hacer zoom o arrastrar no cambia la ubicación.',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Lat: ${_selectedPoint.latitude.toStringAsFixed(6)}',
+                ),
+                Text(
+                  'Lng: ${_selectedPoint.longitude.toStringAsFixed(6)}',
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(
+                        context,
+                        _PickedLocationResult(
+                          latitude: _selectedPoint.latitude,
+                          longitude: _selectedPoint.longitude,
+                        ),
+                      );
+                    },
+                    style: primaryButtonStyle,
+                    child: const Text('Aceptar ubicación'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

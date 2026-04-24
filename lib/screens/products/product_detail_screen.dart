@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -244,6 +246,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Widget _detailsSection(Product product) {
+    final parsed = _extractCoordinatesAndLabel(product.location);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,7 +255,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           const SizedBox(height: 10),
           _row('SKU', product.sku),
           _row('Código', product.barcode),
-          _row('Ubicación', product.location),
+          _locationRow(
+            displayText: parsed.$1,
+            latitude: parsed.$2,
+            longitude: parsed.$3,
+          ),
           _row('Stock Mínimo', '${product.minStock} uds'),
         ],
       ),
@@ -282,6 +289,88 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         children: [Text(label), Text(value)],
       ),
     );
+  }
+
+  Widget _locationRow({
+    required String displayText,
+    required double? latitude,
+    required double? longitude,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [const Text('Ubicación'), Text(displayText)],
+          ),
+          if (latitude != null && longitude != null) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _CoordinateMapViewScreen(
+                        latitude: latitude,
+                        longitude: longitude,
+                      ),
+                    ),
+                  );
+                },
+                child: Text(
+                  'Ver en mapa: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.deepSpaceBlue,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  (String, double?, double?) _extractCoordinatesAndLabel(String location) {
+    final raw = location.trim();
+    if (raw.isEmpty) {
+      return ('No se seleccionó ubicación', null, null);
+    }
+
+    final gpsMatch = RegExp(
+      r'GPS:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    ).firstMatch(raw);
+    if (gpsMatch != null) {
+      final lat = double.tryParse(gpsMatch.group(1) ?? '');
+      final lng = double.tryParse(gpsMatch.group(2) ?? '');
+      final label = raw.replaceFirst(gpsMatch.group(0)!, '').trim();
+      final cleanLabel = label.isEmpty ? 'Ubicación seleccionada' : label;
+      if (lat != null && lng != null) {
+        return (cleanLabel, lat, lng);
+      }
+    }
+
+    final legacyMatch = RegExp(
+      r'Lat:\s*(-?\d+(?:\.\d+)?)\s*,\s*Lng:\s*(-?\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    ).firstMatch(raw);
+    if (legacyMatch != null) {
+      final lat = double.tryParse(legacyMatch.group(1) ?? '');
+      final lng = double.tryParse(legacyMatch.group(2) ?? '');
+      final label = raw.replaceFirst(legacyMatch.group(0)!, '').trim();
+      final cleanLabel = label.isEmpty ? 'Ubicación seleccionada' : label;
+      if (lat != null && lng != null) {
+        return (cleanLabel, lat, lng);
+      }
+    }
+
+    return (raw, null, null);
   }
 
   Widget _actions(BuildContext context, Product product) {
@@ -511,5 +600,51 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         ),
       );
     }
+  }
+}
+
+class _CoordinateMapViewScreen extends StatelessWidget {
+  final double latitude;
+  final double longitude;
+
+  const _CoordinateMapViewScreen({
+    required this.latitude,
+    required this.longitude,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final point = LatLng(latitude, longitude);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Ubicación del producto')),
+      body: FlutterMap(
+        options: MapOptions(
+          initialCenter: point,
+          initialZoom: 16,
+        ),
+        children: [
+          TileLayer(
+            urlTemplate:
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+            subdomains: const ['a', 'b', 'c', 'd'],
+            userAgentPackageName: 'com.inventaria.app',
+          ),
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: point,
+                width: 46,
+                height: 46,
+                child: const Icon(
+                  Icons.location_pin,
+                  size: 46,
+                  color: Colors.red,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

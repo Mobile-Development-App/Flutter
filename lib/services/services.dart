@@ -11,3 +11,6 @@ export 'connectivity_service.dart';
 export 'offline_queue_service.dart';
 export 'cache_service.dart';
 export 'bq_cache_service.dart'; // BQ offline cache (SharedPreferences TTL)
+export 'analytics_worker_service.dart';
+export 'local_store_service.dart';
+export 'motion_vibration_service.dart';

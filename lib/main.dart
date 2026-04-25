@@ -17,6 +17,8 @@ import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
 import 'services/offline_queue_service.dart';
 import 'services/usage_tracking_service.dart';
+import 'services/analytics_worker_service.dart';
+import 'services/local_store_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +41,10 @@ void main() async {
   // Inicializar notificaciones locales (canales Android + config iOS).
   // El permiso real se pide cuando el usuario activa el toggle en Ajustes.
   await NotificationService.shared.init();
+
+  // Worker isolate persistente (analytics) + storage unificado versionado.
+  await AnalyticsWorkerService.shared.init();
+  await LocalStoreService.shared.init();
 
   runApp(
     const ProviderScope(

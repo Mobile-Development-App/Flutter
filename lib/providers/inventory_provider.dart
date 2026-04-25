@@ -12,6 +12,7 @@ import '../services/connectivity_service.dart';
 import '../services/offline_queue_service.dart';
 import '../services/persistence_service.dart';
 import '../core/utils/extensions.dart';
+import '../services/motion_vibration_service.dart';
 import '../services/notification_service.dart';
 import '../services/usage_tracking_service.dart'; // BQ6 — tracking de correcciones e inventario automático
 import 'settings_provider.dart';
@@ -768,6 +769,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
           body: '${product.name} tiene solo ${product.quantity} uds (mín: ${product.minStock})',
           productId: product.id, kind: AlertKind.lowStock,
         );
+        MotionVibrationService.shared.vibrateOnAlert();
       }
     }
 
@@ -782,6 +784,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
           body: '${product.name} se ha agotado completamente',
           productId: product.id, kind: AlertKind.outOfStock,
         );
+        MotionVibrationService.shared.vibrateOnAlert();
       }
     }
 
@@ -797,6 +800,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
           body: '${product.name} vence en $daysLeft días',
           productId: product.id, kind: AlertKind.expiringSoon,
         );
+        MotionVibrationService.shared.vibrateOnAlert();
       }
     }
 

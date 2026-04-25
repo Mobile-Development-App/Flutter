@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/cache_service.dart';
+import '../services/analytics_worker_service.dart';
 import '../services/pipeline_logger.dart';
 import '../services/data_processing_service.dart';
 import '../core/utils/extensions.dart';
@@ -177,8 +179,9 @@ class _Bucket {
 // ─────────────────────────────────────────────
 class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
   final _api        = ApiService.shared;
-  final _processing = DataProcessingService.shared;
+  final _worker     = AnalyticsWorkerService.shared;
   final _pipeline   = PipelineLogger.shared;
+  final _cache      = CacheService.shared;
 
   static const _kProjectId    = 'inventaria-app-ae5ce';
   static const _kFirestoreBase =
@@ -194,8 +197,8 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
     // las agregaciones corren en un Isolate separado.
     final results = await Future.wait([
       _fetchSalesFromFirestore(currentRange),
-      _processing.aggregateStockByCategoryAsync(products),
-      _processing.aggregateCategoryDistributionAsync(products),
+      _worker.aggregateStockByCategoryWorker(products),
+      _worker.aggregateCategoryDistributionWorker(products),
     ]);
 
     final sales       = results[0] as List<SalesDataPoint>;
@@ -228,6 +231,27 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       return [];
     }
 
+    final cacheKey = 'sales_${storeId}_${range.value}';
+    List<SalesDataPoint>? readCached({required bool allowStale}) {
+      final raw = _cache.get(cacheKey, allowStale: allowStale);
+      if (raw is! List) return null;
+      try {
+        return raw
+            .whereType<Map>()
+            .map((m) => SalesDataPoint.fromJson(m.cast<String, dynamic>()))
+            .toList();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Cache (válido) primero: reduce llamadas a Firestore al navegar/rebuilds.
+    final cached = readCached(allowStale: false);
+    if (cached != null && cached.isNotEmpty) {
+      debugPrint('[Analytics] ✅ Sales cache HIT: ${cached.length} pts ($cacheKey)');
+      return cached;
+    }
+
     debugPrint('[Analytics] Consultando Firestore '
         'stores/$storeId/saleRecords range=${range.value}');
 
@@ -244,9 +268,24 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       final filtered = records.where((r) => r.createdAt.isAfter(dateFrom)).toList();
       debugPrint('[Analytics] En rango ${range.value}: ${filtered.length} registros');
 
-      return _aggregateByPeriod(filtered, range, now);
+      final points = _aggregateByPeriod(filtered, range, now);
+
+      // Cache del histórico agregado (no los docs raw): liviano y reusable.
+      // TTL corto para no “congelar” el gráfico si hay ventas nuevas.
+      await _cache.put(
+        cacheKey,
+        points.map((p) => p.toJson()).toList(),
+        ttl: const Duration(minutes: 5),
+      );
+
+      return points;
     } catch (e, st) {
       debugPrint('[Analytics] ❌ _fetchSalesFromFirestore: $e\n$st');
+      final stale = readCached(allowStale: true);
+      if (stale != null && stale.isNotEmpty) {
+        debugPrint('[Analytics] ⚠️  Sales cache STALE fallback: ${stale.length} pts');
+        return stale;
+      }
       return [];
     }
   }
@@ -398,8 +437,8 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
     // Red + dos Isolates en paralelo — el await más largo marca el tiempo total.
     final results = await Future.wait([
       _fetchSalesFromFirestore(range),
-      _processing.aggregateStockByCategoryAsync(products),
-      _processing.aggregateCategoryDistributionAsync(products),
+      _worker.aggregateStockByCategoryWorker(products),
+      _worker.aggregateCategoryDistributionWorker(products),
     ]);
 
     final sales       = results[0] as List<SalesDataPoint>;
@@ -426,8 +465,8 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
     // Misma estrategia de paralelismo que loadData.
     final results = await Future.wait([
       _fetchSalesFromFirestore(range),
-      _processing.aggregateStockByCategoryAsync(products),
-      _processing.aggregateCategoryDistributionAsync(products),
+      _worker.aggregateStockByCategoryWorker(products),
+      _worker.aggregateCategoryDistributionWorker(products),
     ]);
 
     final sales       = results[0] as List<SalesDataPoint>;

@@ -232,6 +232,9 @@ class NotificationService {
       importance: highPriority ? Importance.high : Importance.defaultImportance,
       priority:   highPriority ? Priority.high    : Priority.defaultPriority,
       styleInformation: BigTextStyleInformation(body),
+      vibrationPattern: highPriority
+          ? Int64List.fromList(<int>[0, 300, 150, 300])
+          : null,
     );
 
     const iosDetails = DarwinNotificationDetails(

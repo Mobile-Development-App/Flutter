@@ -115,15 +115,16 @@ class CachedProductThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
+    // BUG FIX: antes había un ClipRRect envolviendo a CachedProductImage que
+    // YA aplica su propio ClipRRect cuando recibe borderRadius. El doble clip
+    // es redundante e ineficiente. Se elimina el outer ClipRRect y se delega
+    // el recorte directamente al parámetro borderRadius de CachedProductImage.
+    return CachedProductImage(
+      product: product,
+      height: size,
+      width: size,
+      iconSize: size * 0.5,
       borderRadius: BorderRadius.circular(8),
-      child: CachedProductImage(
-        product: product,
-        height: size,
-        width: size,
-        iconSize: size * 0.5,
-        borderRadius: BorderRadius.circular(8),
-      ),
     );
   }
 }

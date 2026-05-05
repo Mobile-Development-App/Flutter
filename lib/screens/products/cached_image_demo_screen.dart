@@ -2,6 +2,7 @@
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -34,7 +35,10 @@ class CachedImageDemoScreen extends ConsumerWidget {
             icon: const Icon(Icons.cleaning_services_rounded),
             tooltip: 'Limpiar caché (demo)',
             onPressed: () async {
-              await CachedNetworkImage.evictFromCache('');
+              // BUG FIX: evictFromCache('') solo eliminaba la entrada con URL
+              // vacía (ninguna). Para limpiar TODO el caché de imágenes hay que
+              // usar DefaultCacheManager().emptyCache().
+              await DefaultCacheManager().emptyCache();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

@@ -15,7 +15,7 @@ class MotionVibrationService {
   static final MotionVibrationService shared = MotionVibrationService._();
 
   StreamSubscription<AccelerometerEvent>? _sub;
-  double _lastMagnitude = 0;
+  double _lastMagnitudeSq = 0;
   DateTime _lastSampleAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool get isActive => _sub != null;
@@ -26,8 +26,11 @@ class MotionVibrationService {
     if (_sub != null) return;
 
     _sub = accelerometerEventStream().listen((e) {
+      // Guardamos la magnitud AL CUADRADO (x²+y²+z²) para evitar sqrt().
+      // En reposo la gravedad da ~9.8 m/s² → magnitudSq ≈ 96.
+      // El umbral de movimiento se define también en unidades cuadradas (>140).
       final m = (e.x * e.x + e.y * e.y + e.z * e.z);
-      _lastMagnitude = m;
+      _lastMagnitudeSq = m;
       _lastSampleAt = DateTime.now();
     });
 
@@ -53,7 +56,7 @@ class MotionVibrationService {
     final hasRecentMotionSample = ageMs >= 0 && ageMs <= 1500;
 
     // Aprox: 9.8^2 ≈ 96 cuando está quieto; arriba de ~140 suele indicar movimiento notable.
-    final isMoving = hasRecentMotionSample && _lastMagnitude > 140.0;
+    final isMoving = hasRecentMotionSample && _lastMagnitudeSq > 140.0;
 
     try {
       if (isMoving) {

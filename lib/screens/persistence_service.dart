@@ -1,9 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
-import 'local_file_service.dart';
 import 'pipeline_logger.dart';
 
 // ─────────────────────────────────────────────
@@ -80,82 +80,92 @@ class AuditEvent {
 
 // ─────────────────────────────────────────────
 // PersistenceService
-// Guarda auditoría, tiendas y empleados en archivos .json reales
-// mediante dart:io (LocalFileService). SharedPreferences solo
-// se usa para el flag de seed (dato escalar, no colección).
+// Handles: local cache, audit log, stores/employees (local-only fallback)
+// JWT token storage is handled by ApiService
 // ─────────────────────────────────────────────
 class PersistenceService {
   PersistenceService._();
   static final PersistenceService shared = PersistenceService._();
 
-  // SharedPreferences SOLO para el flag booleano de seed.
-  static const _kSeeded = 'inventaria_seeded';
+  static const _kAuditLog  = 'inventaria_audit_log';
+  static const _kSeeded    = 'inventaria_seeded';
+  static const _kStores    = 'inventaria_stores';
+  static const _kEmployees = 'inventaria_employees';
 
-  final _fs = LocalFileService.shared;
+  // ── Generic helpers ────────────────────────
 
-  // ── Audit log ──────────────────────────────────────────────────────────
+  Future<void> _saveList<T>(
+    String key,
+    List<T> items,
+    Map<String, dynamic> Function(T) toJson,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, jsonEncode(items.map(toJson).toList()));
+    } catch (e) {
+      debugPrint('[PersistenceService] saveList $key error: $e');
+    }
+  }
 
-  /// Registra un [AuditEvent] en audit_log.json (archivo real en disco).
+  Future<List<T>> _loadList<T>(
+    String key,
+    T Function(Map<String, dynamic>) fromJson,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return [];
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded
+          .map((e) => fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('[PersistenceService] loadList $key error: $e');
+      return [];
+    }
+  }
+
+  // ── Audit log ──────────────────────────────
+
   Future<void> logAuditEvent(AuditEvent event) async {
     final sw = Stopwatch()..start();
-
-    final raw    = await _fs.readList(LocalFileService.auditLogFile);
-    final events = raw.map(AuditEvent.fromJson).toList()..add(event);
-
+    final events = await _loadList(_kAuditLog, AuditEvent.fromJson);
+    events.add(event);
     final trimmed = events.length > 1000
         ? events.sublist(events.length - 1000)
         : events;
-
-    // Escritura real en disco con dart:io.
-    await _fs.writeList(
-      LocalFileService.auditLogFile,
-      trimmed.map((e) => e.toJson()).toList(),
-    );
-
+    await _saveList(_kAuditLog, trimmed, (e) => e.toJson());
     sw.stop();
+    // STORAGE layer — local SharedPreferences write (offline-first)
     PipelineLogger.shared.log(
       stage:       PipelineStage.storage,
-      operation:   'logAuditEvent → dart:io [${LocalFileService.auditLogFile}]',
+      operation:   'logAuditEvent → SharedPreferences [local]',
       recordCount: trimmed.length,
       latency:     sw.elapsed,
     );
   }
 
-  /// Devuelve todos los eventos del log de auditoría.
-  Future<List<AuditEvent>> loadAuditLog() async {
-    final raw = await _fs.readList(LocalFileService.auditLogFile);
-    return raw.map(AuditEvent.fromJson).toList();
-  }
-
-  // ── Stores ─────────────────────────────────────────────────────────────
+  // ── Stores ─────────────────────────────────
 
   Future<List<Store>> loadStores() async {
-    final raw = await _fs.readList(LocalFileService.storesFile);
-    return raw.map(Store.fromJson).toList();
+    return _loadList(_kStores, Store.fromJson);
   }
 
   Future<void> saveStores(List<Store> stores) async {
-    await _fs.writeList(
-      LocalFileService.storesFile,
-      stores.map((s) => s.toJson()).toList(),
-    );
+    await _saveList(_kStores, stores, (s) => s.toJson());
   }
 
-  // ── Employees ──────────────────────────────────────────────────────────
+  // ── Employees ──────────────────────────────
 
   Future<List<Employee>> loadEmployees() async {
-    final raw = await _fs.readList(LocalFileService.employeesFile);
-    return raw.map(Employee.fromJson).toList();
+    return _loadList(_kEmployees, Employee.fromJson);
   }
 
   Future<void> saveEmployees(List<Employee> employees) async {
-    await _fs.writeList(
-      LocalFileService.employeesFile,
-      employees.map((e) => e.toJson()).toList(),
-    );
+    await _saveList(_kEmployees, employees, (e) => e.toJson());
   }
 
-  // ── Seed flag ──────────────────────────────────────────────────────────
+  // ── Seed flag ──────────────────────────────
 
   Future<bool> isSeeded() async {
     final prefs = await SharedPreferences.getInstance();

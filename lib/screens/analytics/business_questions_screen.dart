@@ -7,7 +7,6 @@ import '../../core/utils/extensions.dart';
 import '../../models/product.dart';
 import '../../providers/connectivity_provider.dart';
 import '../../providers/providers.dart';
-import '../../services/usage_tracking_service.dart';
 
 class BusinessQuestionsScreen extends StatelessWidget {
   const BusinessQuestionsScreen({super.key});

@@ -44,7 +44,7 @@ void main() async {
 
   // Worker isolate persistente (analytics) + storage unificado versionado.
   await AnalyticsWorkerService.shared.init();
-  await LocalStoreService.shared.init();
+  await LocalDatabaseService.shared.init();
 
   runApp(
     const ProviderScope(

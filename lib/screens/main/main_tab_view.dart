@@ -59,26 +59,21 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
     final pending  = invState?.pendingOpsCount ?? 0;
 
     return Scaffold(
-      body: Stack(
+      body: Column(
         children: [
-          IndexedStack(
-            index: _selectedIndex,
-            children: _screens,
-          ),
-          // ── Offline / syncing banner (Sprint 4) ──────────────────────────
-          if (!isOnline || (isOnline && pending > 0))
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _OfflineBanner(isOnline: isOnline, pendingCount: pending),
+          // ── Contenido de la pantalla activa ──────────────────────────
+          Expanded(
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: _screens,
             ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _buildTabBar(invState),
           ),
+          // ── Offline / syncing banner (Sprint 4) ──────────────────────
+          // Se muestra DEBAJO del contenido para no tapar AppBars ni botones.
+          if (!isOnline || (isOnline && pending > 0))
+            _OfflineBanner(isOnline: isOnline, pendingCount: pending),
+          // ── Tab bar ──────────────────────────────────────────────────
+          _buildTabBar(invState),
         ],
       ),
     );
@@ -260,15 +255,11 @@ class _OfflineBanner extends StatelessWidget {
         ? 'Sincronizando $pendingCount operación${pendingCount == 1 ? "" : "es"}...'
         : 'Sin conexión — cambios guardados localmente';
 
-    return Material(
-      color: Colors.transparent,
-      child: SafeArea(
-        bottom: false,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          color: color,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+      color: color,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
             children: [
               Icon(icon, color: Colors.white, size: 15),
@@ -297,8 +288,6 @@ class _OfflineBanner extends StatelessWidget {
                 ),
             ],
           ),
-        ),
-      ),
     );
   }
 }

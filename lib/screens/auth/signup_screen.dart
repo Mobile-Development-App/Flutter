@@ -172,12 +172,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Error banner ──
-                    if (signUpError != null) ...[
-                      _errorBanner(signUpError),
-                      const SizedBox(height: 16),
-                    ],
-
                     // ── Section: Datos personales ──
                     _sectionLabel(
                         'Datos Personales', Icons.person_outline_rounded),
@@ -296,6 +290,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     ),
 
                     const SizedBox(height: 20),
+
+                    // ── Error banner (sin internet) ──
+                    if (signUpError != null) ...[
+                      _errorBanner(signUpError),
+                      const SizedBox(height: 12),
+                    ],
 
                     // ── Submit ──
                     SizedBox(

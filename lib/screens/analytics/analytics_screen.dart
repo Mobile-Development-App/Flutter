@@ -14,6 +14,7 @@ import '../../widgets/app_card.dart';
 import '../../services/usage_tracking_service.dart';
 import 'usage_insights_screen.dart';
 import 'business_questions_screen.dart';
+import 'inventory_health_screen.dart'; // Sprint 4 — New Feature
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -54,6 +55,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       appBar: AppBar(
         title: const Text('Analítica'),
         actions: [
+          // Sprint 4 — New Feature: Salud del Inventario (4 Isolates en paralelo)
+          IconButton(
+            icon: const Icon(Icons.health_and_safety_rounded),
+            tooltip: 'Salud del Inventario',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const InventoryHealthScreen(),
+              ),
+            ),
+          ),
           // Sprint 4 — acceso directo a BQ3 · BQ4 · BQ6
           IconButton(
             icon: const Icon(Icons.quiz_rounded),

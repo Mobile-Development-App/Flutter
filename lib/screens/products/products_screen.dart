@@ -4,7 +4,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../providers/providers.dart';
-import '../../providers/inventory_provider.dart';
 import '../../widgets/widgets.dart';
 import 'add_product_screen.dart';
 import 'product_detail_screen.dart';
@@ -60,9 +59,20 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen>
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: AppSearchBar(
               controller: _searchCtrl,
-              onChanged: (v) => ref
-                  .read(inventoryProvider.notifier)
-                  .setSearchText(v),
+              onChanged: (v) {
+                ref
+                    .read(inventoryProvider.notifier)
+                    .setSearchText(v);
+                // Cachear búsqueda si tiene contenido significativo
+                if (v.trim().length >= 2) {
+                  final notifier =
+                      ProductSearchHistoryNotifier(ref);
+                  notifier.addSearch(v.trim(),
+                      resultCount:
+                          (invState?.filteredProducts.length ??
+                              0));
+                }
+              },
             ),
           ),
           // Filter tabs
@@ -149,6 +159,9 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen>
             ),
           ),
           const SizedBox(height: 8),
+          // Recent searches (only when search is empty)
+          if ((invState?.searchText.isEmpty ?? true))
+            _buildRecentSearches(ref, context),
           // Product list
           Expanded(
             child: products.isEmpty
@@ -214,6 +227,118 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen>
           child: ProductDetailScreen(product: product),
         ),
       ),
+    );
+  }
+
+  Widget _buildRecentSearches(WidgetRef ref, BuildContext context) {
+    final isDark = context.isDark;
+    final searchHistoryAsync =
+        ref.watch(productSearchHistoryProvider);
+
+    return searchHistoryAsync.when(
+      data: (searches) {
+        if (searches.isEmpty) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Búsquedas recientes',
+                    style: AppTypography.caption.copyWith(
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      final notifier =
+                          ProductSearchHistoryNotifier(ref);
+                      notifier.clearAll();
+                    },
+                    child: Text(
+                      'Limpiar',
+                      style: AppTypography.caption2.copyWith(
+                        color: AppColors.freshSky,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 32,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: searches.length,
+                  itemBuilder: (_, i) {
+                    final search = searches[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          _searchCtrl.text = search.query;
+                          ref
+                              .read(inventoryProvider.notifier)
+                              .setSearchText(search.query);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.darkSurface
+                                : AppColors.surface,
+                            borderRadius:
+                                BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.freshSky
+                                  .withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.history,
+                                size: 12,
+                                color: AppColors.freshSky,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                search.query,
+                                style:
+                                    AppTypography.caption2
+                                        .copyWith(
+                                  color: isDark
+                                      ? AppColors
+                                          .darkTextPrimary
+                                      : AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow:
+                                    TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }

@@ -10,6 +10,7 @@ import '../services/usage_tracking_service.dart';
 // BQ5  (Type 2)  Screens the user engages with most during peak hours
 // BQ7  (Type 3)  Barcode scan vs manual entry accuracy (last 30 days)
 // BQ8  (Type 3)  Which analytical features accessed most per week
+// BQ9  (Type 2)  Workflow points where restock decisions consume most time
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── BQ1 — Average processing latency ─────────────────────────────────────────
@@ -196,3 +197,50 @@ class BQ8Notifier extends AsyncNotifier<List<FeatureUsageInsight>> {
 final bq8Provider =
     AsyncNotifierProvider<BQ8Notifier, List<FeatureUsageInsight>>(
         BQ8Notifier.new);
+
+// ── BQ9 — Restock decision workflow hotspots ─────────────────────────────────
+
+class BQ9Dashboard {
+  final List<RestockWorkflowInsight> points;
+  final double totalDecisionSeconds;
+  final double averageDecisionSeconds;
+  final int totalSessions;
+
+  const BQ9Dashboard({
+    required this.points,
+    required this.totalDecisionSeconds,
+    required this.averageDecisionSeconds,
+    required this.totalSessions,
+  });
+}
+
+class BQ9Notifier extends AsyncNotifier<BQ9Dashboard> {
+  @override
+  Future<BQ9Dashboard> build() async {
+    await UsageTrackingService.shared.init();
+    return _load();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(_load);
+  }
+
+  Future<BQ9Dashboard> _load() async {
+    final points = await UsageTrackingService.shared.getRestockWorkflowInsights(limitDays: 30);
+    final totalDecisionSeconds = points.fold<double>(0, (sum, point) => sum + point.totalSeconds);
+    final totalSessions = points.fold<int>(0, (sum, point) => sum + point.visits);
+    final averageDecisionSeconds =
+      totalSessions == 0 ? 0.0 : totalDecisionSeconds / totalSessions;
+
+    return BQ9Dashboard(
+      points: points,
+      totalDecisionSeconds: totalDecisionSeconds,
+      averageDecisionSeconds: averageDecisionSeconds,
+      totalSessions: totalSessions,
+    );
+  }
+}
+
+final bq9Provider =
+    AsyncNotifierProvider<BQ9Notifier, BQ9Dashboard>(BQ9Notifier.new);

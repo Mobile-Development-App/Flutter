@@ -4,6 +4,8 @@ import '../models/alert.dart';
 import '../models/product.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/inventory_health_provider.dart';
+import '../services/inventory_health_service.dart';
 import '../services/pipeline_logger.dart';
 
 // ─────────────────────────────────────────────
@@ -92,6 +94,44 @@ class HealthScore {
       );
     }
   }
+
+  static HealthScore fromReport(InventoryHealthReport report) {
+    final score = report.overallScore.round().clamp(0, 100);
+
+    if (score >= 80) {
+      return HealthScore(
+        score: score,
+        label: report.scoreLabel,
+        color: const Color(0xFF30D158),
+        emoji: '🚀',
+        description: 'Tu inventario está en óptimas condiciones',
+      );
+    } else if (score >= 60) {
+      return HealthScore(
+        score: score,
+        label: report.scoreLabel,
+        color: const Color(0xFF34C759),
+        emoji: '✅',
+        description: 'Inventario saludable con algunos puntos a mejorar',
+      );
+    } else if (score >= 40) {
+      return HealthScore(
+        score: score,
+        label: report.scoreLabel,
+        color: const Color(0xFFFF9F0A),
+        emoji: '⚠️',
+        description: 'Requiere atención en varias categorías',
+      );
+    } else {
+      return HealthScore(
+        score: score,
+        label: report.scoreLabel,
+        color: const Color(0xFFFF453A),
+        emoji: '🔴',
+        description: 'Acción urgente requerida en el inventario',
+      );
+    }
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -175,9 +215,11 @@ class ContextNotifier extends Notifier<ContextState> {
     final sw = Stopwatch()..start();
     final invAsync  = ref.watch(inventoryProvider);
     final authAsync = ref.watch(authProvider);
+    final healthAsync = ref.watch(inventoryHealthProvider);
 
     final inv  = invAsync.value;
     final auth = authAsync.value;
+    final healthReport = healthAsync.value;
 
     if (inv == null) {
       sw.stop();
@@ -201,13 +243,15 @@ class ContextNotifier extends Notifier<ContextState> {
     final expiring  = products.where((p) => p.isExpiringSoon).toList();
     final urgent    = alerts.where((a) => !a.isRead && a.priority == AlertPriority.high).toList();
 
-    final health = HealthScore.compute(
-      total:        products.length,
-      lowStock:     stats.lowStockCount,
-      outOfStock:   stats.outOfStockCount,
-      expiring:     stats.expiringCount,
-      unreadAlerts: inv.unreadAlertCount,
-    );
+    final health = healthReport != null
+        ? HealthScore.fromReport(healthReport)
+        : HealthScore.compute(
+            total:        products.length,
+            lowStock:     stats.lowStockCount,
+            outOfStock:   stats.outOfStockCount,
+            expiring:     stats.expiringCount,
+            unreadAlerts: inv.unreadAlertCount,
+          );
 
     final stockHealthPercent = products.isEmpty
         ? 100.0

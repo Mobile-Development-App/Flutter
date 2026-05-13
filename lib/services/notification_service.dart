@@ -41,6 +41,13 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
+    if (kIsWeb) {
+      _initialized = true;
+      _permissionGranted = false;
+      debugPrint('[Notifications] Web detected - local notifications disabled');
+      return;
+    }
+
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: false, // pedimos en el momento oportuno

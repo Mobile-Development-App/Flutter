@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/utils/isolate_compat.dart' as iso;
 import '../models/models.dart';
 import 'data_processing_service.dart';
 import 'pipeline_logger.dart';
@@ -32,9 +32,9 @@ class AnalyticsWorkerService {
 
   final _logger = PipelineLogger.shared;
 
-  Isolate? _isolate;
-  SendPort? _send;
-  ReceivePort? _receive;
+  iso.WorkerIsolate? _isolate;
+  iso.WorkerSendPort? _send;
+  iso.WorkerReceivePort? _receive;
 
   int _nextId = 1;
   final Map<int, Completer<_WorkerResponse>> _pending = {};
@@ -42,12 +42,13 @@ class AnalyticsWorkerService {
   bool get isInitialized => _send != null;
 
   Future<void> init() async {
+    if (kIsWeb) return; // dart:isolate not supported on web
     if (_send != null) return;
 
-    final ready = ReceivePort();
-    final recv = ReceivePort();
+    final ready = iso.newReceivePort();
+    final recv = iso.newReceivePort();
 
-    _isolate = await Isolate.spawn<_IsolateBoot>(
+    _isolate = await iso.spawnWorker<_IsolateBoot>(
       _workerMain,
       _IsolateBoot(ready.sendPort, recv.sendPort),
       debugName: 'analytics_worker',
@@ -72,7 +73,7 @@ class AnalyticsWorkerService {
     });
 
     final port = await ready.first;
-    if (port is! SendPort) {
+    if (port is! iso.WorkerSendPort) {
       throw StateError('Worker did not provide SendPort');
     }
     _send = port;
@@ -89,13 +90,17 @@ class AnalyticsWorkerService {
     _receive?.close();
     _receive = null;
     _send = null;
-    _isolate?.kill(priority: Isolate.immediate);
+    _isolate?.kill(priority: iso.isolateImmediate);
     _isolate = null;
   }
 
   Future<AggregationResult<List<StockLevelData>>> aggregateStockByCategoryWorker(
     List<Product> products,
   ) async {
+    // Web fallback: run synchronously — no Isolate available on web.
+    if (kIsWeb) {
+      return DataProcessingService.shared.aggregateStockByCategory(products);
+    }
     final sw = Stopwatch()..start();
     await init();
 
@@ -138,6 +143,10 @@ class AnalyticsWorkerService {
   Future<AggregationResult<List<CategoryDistribution>>> aggregateCategoryDistributionWorker(
     List<Product> products,
   ) async {
+    // Web fallback: run synchronously — no Isolate available on web.
+    if (kIsWeb) {
+      return DataProcessingService.shared.aggregateCategoryDistribution(products);
+    }
     final sw = Stopwatch()..start();
     await init();
 
@@ -215,13 +224,13 @@ class AnalyticsWorkerService {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _IsolateBoot {
-  final SendPort readyPort;
-  final SendPort replyPort;
+  final iso.WorkerSendPort readyPort;
+  final iso.WorkerSendPort replyPort;
   const _IsolateBoot(this.readyPort, this.replyPort);
 }
 
 void _workerMain(_IsolateBoot boot) {
-  final inbox = ReceivePort();
+  final inbox = iso.newReceivePort();
   boot.readyPort.send(inbox.sendPort);
 
   inbox.listen((msg) {

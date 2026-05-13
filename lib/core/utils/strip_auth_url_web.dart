@@ -5,7 +5,9 @@ import 'dart:html' as html;
 void stripPasswordResetFromBrowserUrl() {
   final loc = html.window.location;
   final search = loc.search ?? '';
-  final hash = loc.hash ?? '';
-  if (!search.contains('oobCode') && !hash.contains('oobCode')) return;
+  final hash = loc.hash;
+  if (!search.contains('oobCode') && !hash.contains('oobCode')) {
+    return;
+  }
   html.window.history.replaceState(null, html.document.title, '/');
 }

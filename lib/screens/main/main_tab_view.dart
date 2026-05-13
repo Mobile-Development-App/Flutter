@@ -23,6 +23,15 @@ class _MainTabViewState extends ConsumerState<MainTabView> {
   int _selectedIndex = 0;
 
   // ── Pantallas del IndexedStack ────────────────────────────────────────────
+    @override
+    void initState() {
+      super.initState();
+      // Montar el watcher de offline queue para sincronización automática
+      // al recuperar conectividad (Sprint 5 — Eventual Connectivity)
+      Future.microtask(() {
+        ref.read(offlineQueueWatcherProvider);
+      });
+    }
   //
   // AnalyticsScreen está envuelta en ProtectedRoute con roles owner + manager.
   // Si el usuario es employee o viewer, ve _AccessDeniedScreen en lugar de

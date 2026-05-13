@@ -12,6 +12,8 @@ import '../../providers/providers.dart';
 import '../../providers/restock_latency_provider.dart';
 import '../../widgets/app_card.dart';
 import 'add_product_screen.dart';
+// Sprint 3 — BQ5: screen session tracking
+import '../../core/utils/screen_tracker_mixin.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final Product product;
@@ -26,8 +28,12 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
       _ProductDetailScreenState();
 }
 
-class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
+class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
+    with ScreenTrackerMixin {
   bool _saleLoading = false;
+
+  @override
+  String get trackedScreenName => 'productDetail';
 
   Product get _current {
     final inv = ref.read(inventoryProvider).value;
@@ -54,6 +60,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     final restockDays = restockInfo.recommendedDays ??
         restockInfo.lastCycleDays ??
         restockInfo.averageDays;
+    final pinnedAsync = ref.watch(pinnedProductsProvider);
+    final isPinned = pinnedAsync.valueOrNull?.contains(product.id) ?? false;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
@@ -63,6 +71,16 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            tooltip: isPinned ? 'Quitar de fijados' : 'Fijar producto',
+            icon: Icon(
+              isPinned ? Icons.star_rounded : Icons.star_border_rounded,
+              color: isPinned ? const Color(0xFFFFC107) : Colors.white,
+            ),
+            onPressed: () => _togglePinned(product),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -415,6 +433,23 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: Icon(
+              _isPinned(product.id) ? Icons.star_rounded : Icons.star_border_rounded,
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFFFC107),
+              side: const BorderSide(color: Color(0xFFFFC107)),
+            ),
+            onPressed: () => _togglePinned(product),
+            label: Text(
+              _isPinned(product.id) ? 'Quitar de fijados' : 'Fijar producto',
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
           child: OutlinedButton(
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.error,
@@ -426,6 +461,26 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         ),
       ],
     );
+  }
+
+  bool _isPinned(String productId) {
+    final pinned = ref.read(pinnedProductsProvider).valueOrNull ?? const <String>{};
+    return pinned.contains(productId);
+  }
+
+  Future<void> _togglePinned(Product product) async {
+    await ref.read(pinnedProductsProvider.notifier).toggle(product.id);
+    if (!mounted) return;
+    final pinnedNow = _isPinned(product.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          pinnedNow ? '${product.name} quedó fijado' : '${product.name} se quitó de fijados',
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    setState(() {});
   }
 
   Future<void> _showSaleDialog(BuildContext context, Product product) async {

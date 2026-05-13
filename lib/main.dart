@@ -1,5 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -19,38 +19,73 @@ import 'services/offline_queue_service.dart';
 import 'services/usage_tracking_service.dart';
 import 'services/analytics_worker_service.dart';
 import 'services/local_store_service.dart';
+import 'services/search_history_cache.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
-  await initializeDateFormatting('es_ES', null);
-  await initializeDateFormatting('es_CO', null);
+    await initializeDateFormatting('es_ES', null);
+    await initializeDateFormatting('es_CO', null);
 
-  // Estrategia de almacenamiento local (Hive) — Sprint 3.
-  await UsageTrackingService.shared.init();
+    // Estrategia de almacenamiento local (Hive) — Sprint 3.
+    await UsageTrackingService.shared.init();
+    await LocalStoreService.shared.init();
+    await SearchHistoryCacheService.shared.init();
 
-  // Sprint 4 — Eventual connectivity + Caching strategy.
-  await ConnectivityService.shared.init();
-  await OfflineQueueService.shared.init();
-  await CacheService.shared.init();
+    // Sprint 4 — Eventual connectivity + Caching strategy.
+    await ConnectivityService.shared.init();
+    await OfflineQueueService.shared.init();
+    await CacheService.shared.init();
 
-  // Inicializar notificaciones locales (canales Android + config iOS).
-  // El permiso real se pide cuando el usuario activa el toggle en Ajustes.
-  await NotificationService.shared.init();
+    // Inicializar notificaciones locales (canales Android + config iOS).
+    // El permiso real se pide cuando el usuario activa el toggle en Ajustes.
+    await NotificationService.shared.init();
 
-  // Worker isolate persistente (analytics) + storage unificado versionado.
-  await AnalyticsWorkerService.shared.init();
-  await LocalDatabaseService.shared.init();
+    // Worker isolate persistente (analytics) + storage unificado versionado.
+    await AnalyticsWorkerService.shared.init();
+    if (!kIsWeb) {
+      await LocalDatabaseService.shared.init();
+    }
 
-  runApp(
-    const ProviderScope(
-      child: InventarIAApp(),
-    ),
-  );
+    runApp(
+      const ProviderScope(
+        child: InventarIAApp(),
+      ),
+    );
+  } catch (error, stackTrace) {
+    debugPrint('[Startup] Fatal error: $error');
+    if (kDebugMode) {
+      debugPrintStack(stackTrace: stackTrace);
+    }
+    runApp(_StartupErrorApp(message: error.toString()));
+  }
+}
+
+class _StartupErrorApp extends StatelessWidget {
+  final String message;
+  const _StartupErrorApp({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Error al iniciar la aplicacion:\n$message',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class InventarIAApp extends ConsumerWidget {

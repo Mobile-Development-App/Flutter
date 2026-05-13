@@ -5,10 +5,13 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../models/product.dart';
 import '../../providers/providers.dart';
+import '../../services/inventory_health_service.dart';
 import '../../widgets/widgets.dart';
 import '../notifications/notifications_screen.dart';
 import '../products/add_product_screen.dart';
+import '../products/product_detail_screen.dart';
 import '../products/products_screen.dart';
 import '../restock/restock_screen.dart';
 import '../settings/settings_screen.dart';
@@ -64,7 +67,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final isDark   = context.isDark;
     final invAsync = ref.watch(inventoryProvider);
     final ctx      = ref.watch(contextProvider);
+    final healthAsync = ref.watch(inventoryHealthProvider);
+    final pinnedAsync = ref.watch(pinnedProductsProvider);
     final invState = invAsync.value;
+    final pinnedIds = pinnedAsync.valueOrNull ?? <String>{};
+    final pinnedProducts = invState?.products
+            .where((product) => pinnedIds.contains(product.id))
+            .toList() ??
+        <Product>[];
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
@@ -86,7 +96,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     _contextBanner(ctx, isDark),
                     const SizedBox(height: 20),
                     // ── Health Score ──
-                    _healthScoreCard(ctx, isDark),
+                    _healthScoreCard(ctx, healthAsync.value, isDark),
+                    const SizedBox(height: 20),
+                    // ── Pinned Products ──
+                    _pinnedProductsSection(pinnedProducts, isDark),
                     const SizedBox(height: 20),
                     // ── Stats Grid ──
                     _statsGrid(invState, ctx),
@@ -319,8 +332,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // ─────────────────────────────────────────────
   // Health Score Card
   // ─────────────────────────────────────────────
-  Widget _healthScoreCard(ContextState ctx, bool isDark) {
-    final h = ctx.healthScore;
+  Widget _healthScoreCard(
+    ContextState ctx,
+    InventoryHealthReport? report,
+    bool isDark,
+  ) {
+    final h = report != null ? HealthScore.fromReport(report) : ctx.healthScore;
     return AppCard(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -400,6 +417,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _pinnedProductsSection(List<Product> pinnedProducts, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          icon: Icons.star_rounded,
+          iconColor: const Color(0xFFFFC107),
+          title: 'Productos fijados',
+          badge: pinnedProducts.isEmpty ? null : '${pinnedProducts.length}',
+          badgeColor: const Color(0xFFFFC107),
+        ),
+        const SizedBox(height: 12),
+        if (pinnedProducts.isEmpty)
+          AppCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFC107).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.star_border_rounded,
+                      color: Color(0xFFFFC107), size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Fija un producto desde su detalle para verlo aquí y mantenerlo a mano.',
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          SizedBox(
+            height: 132,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: pinnedProducts.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, index) => _pinnedProductCard(
+                pinnedProducts[index],
+                isDark,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _pinnedProductCard(Product product, bool isDark) {
+    final statusColor = product.stockStatus.color;
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(product: product),
+          ),
+        );
+      },
+      child: Container(
+        width: 170,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFFFC107).withValues(alpha: 0.28),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: product.category.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(product.category.icon,
+                      color: product.category.color, size: 18),
+                ),
+                const Spacer(),
+                Icon(Icons.star_rounded, color: const Color(0xFFFFC107)),
+              ],
+            ),
+            Text(
+              product.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption.copyWith(
+                fontWeight: FontWeight.w700,
+                color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+              ),
+            ),
+            Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 12, color: statusColor),
+                const SizedBox(width: 4),
+                Text(
+                  '${product.quantity} uds',
+                  style: AppTypography.caption2.copyWith(color: statusColor),
+                ),
+              ],
+            ),
+            Text(
+              product.stockStatus.label,
+              style: AppTypography.caption2.copyWith(
+                color: statusColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

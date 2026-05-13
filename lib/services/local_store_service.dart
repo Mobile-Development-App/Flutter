@@ -32,8 +32,12 @@
 // datos de producto, resumen de stock por tienda.
 // ══════════════════════════════════════════════════════════════════════════════
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/product.dart';
@@ -635,4 +639,113 @@ class LocalDatabaseService {
         quantity:  row['quantity']   as int? ?? 0,
         createdAt: DateTime.parse(row['created_at'] as String),
       );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LocalStoreService — versioned local storage for app-level preferences
+// ─────────────────────────────────────────────────────────────────────────────
+
+class LocalStoreService {
+  LocalStoreService._();
+  static final LocalStoreService shared = LocalStoreService._();
+
+  static const int currentSchemaVersion = 1;
+  static const String _boxName = 'local_store_v1';
+  static const String _spPrefix = 'inventaria_local_store_v1_';
+
+  Box<String>? _box;
+  bool _initAttempted = false;
+
+  Future<void> init() async {
+    if (_initAttempted) return;
+    _initAttempted = true;
+    try {
+      _box = await Hive.openBox<String>(_boxName);
+      debugPrint('[LocalStore] init: Hive box opened ($_boxName)');
+    } catch (e) {
+      _box = null;
+      debugPrint('[LocalStore] init: Hive unavailable, fallback to SharedPreferences ($e)');
+    }
+  }
+
+  Future<void> setJson(
+    String key,
+    Map<String, dynamic> data, {
+    int schemaVersion = currentSchemaVersion,
+  }) async {
+    await init();
+    final payload = jsonEncode({
+      'schemaVersion': schemaVersion,
+      'data': data,
+      'writtenAt': DateTime.now().toIso8601String(),
+    });
+
+    final box = _box;
+    if (box != null) {
+      await box.put(key, payload);
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_spPrefix$key', payload);
+  }
+
+  Future<Map<String, dynamic>?> getJson(String key) async {
+    await init();
+    String? raw;
+
+    final box = _box;
+    if (box != null) {
+      raw = box.get(key);
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      raw = prefs.getString('$_spPrefix$key');
+    }
+
+    if (raw == null || raw.isEmpty) return null;
+
+    try {
+      final decoded = (jsonDecode(raw) as Map).cast<String, dynamic>();
+      final v = (decoded['schemaVersion'] as int?) ?? 0;
+      final data = decoded['data'];
+
+      if (data is! Map) return null;
+
+      final mapData = data.cast<String, dynamic>();
+      if (v == currentSchemaVersion) return mapData;
+
+      final migrated = _migrate(mapData, from: v, to: currentSchemaVersion);
+      if (migrated == null) return null;
+
+      await setJson(key, migrated, schemaVersion: currentSchemaVersion);
+      return migrated;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> remove(String key) async {
+    await init();
+    final box = _box;
+    if (box != null) {
+      await box.delete(key);
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_spPrefix$key');
+  }
+
+  Map<String, dynamic>? _migrate(
+    Map<String, dynamic> data, {
+    required int from,
+    required int to,
+  }) {
+    if (from == to) return data;
+    if (from <= 0) return data;
+
+    debugPrint(
+      '[LocalStore] ⚠️  No migration defined from v$from → v$to. '
+      'Returning data as-is (forward-compatible fallback).',
+    );
+    return data;
+  }
 }

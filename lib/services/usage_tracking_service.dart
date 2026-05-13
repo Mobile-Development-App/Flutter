@@ -82,6 +82,28 @@ class FeatureUsageInsight {
   });
 }
 
+class RestockWorkflowInsight {
+  final String pointKey;
+  final String pointName;
+  final double totalSeconds;
+  final int visits;
+  final double averageSeconds;
+  final double shareOfWorkflow;
+  final String optimizationHint;
+  final String monetizationHint;
+
+  const RestockWorkflowInsight({
+    required this.pointKey,
+    required this.pointName,
+    required this.totalSeconds,
+    required this.visits,
+    required this.averageSeconds,
+    required this.shareOfWorkflow,
+    required this.optimizationHint,
+    required this.monetizationHint,
+  });
+}
+
 class ExpiryPriorityInsight {
   final String productId;
   final String productName;
@@ -192,6 +214,74 @@ List<FeatureUsageInsight> _aggregateFeatureUsage(
           ))
       .toList()
     ..sort((a, b) => b.usageCount.compareTo(a.usageCount));
+}
+
+List<RestockWorkflowInsight> _aggregateRestockWorkflow(
+    List<Map<String, dynamic>> rows) {
+  const workflowPoints = <String, ({String name, String optimization, String monetization})>{
+    'products': (
+      name: 'Inventario / Lista de productos',
+      optimization: 'Prioriza filtros por stock crítico, chips de estado y acceso directo a productos con riesgo.',
+      monetization: 'Convierte la priorización inteligente en una función premium con recomendaciones y alertas avanzadas.',
+    ),
+    'productDetail': (
+      name: 'Detalle de producto',
+      optimization: 'Lleva stock, margen y recomendación de reposición above the fold para decidir sin fricción.',
+      monetization: 'Ofrece análisis predictivo, comparativas y sugerencias de compra como módulo de valor agregado.',
+    ),
+    'restock': (
+      name: 'Pantalla de reabastecimiento',
+      optimization: 'Agrupa decisiones en una sola acción, con lista de compra, proveedor sugerido y edición masiva.',
+      monetization: 'Monetiza integraciones con proveedores, exportación automática de pedidos y flujos de compra asistida.',
+    ),
+  };
+
+  final buckets = <String, Map<String, dynamic>>{};
+  for (final row in rows) {
+    final screen = row['screen_name'] as String? ?? '';
+    final meta = workflowPoints[screen];
+    if (meta == null) continue;
+
+    final duration = (row['duration_seconds'] as num?)?.toDouble() ?? 0;
+    buckets.putIfAbsent(
+      screen,
+      () => {
+        'pointKey': screen,
+        'pointName': meta.name,
+        'totalSeconds': 0.0,
+        'visits': 0,
+        'optimizationHint': meta.optimization,
+        'monetizationHint': meta.monetization,
+      },
+    );
+
+    buckets[screen]!['totalSeconds'] =
+        (buckets[screen]!['totalSeconds'] as double) + duration;
+    buckets[screen]!['visits'] = (buckets[screen]!['visits'] as int) + 1;
+  }
+
+  final totalSeconds = buckets.values.fold<double>(
+    0,
+    (sum, entry) => sum + (entry['totalSeconds'] as double),
+  );
+
+  return buckets.values
+      .map((entry) {
+        final visits = entry['visits'] as int;
+        final spent = entry['totalSeconds'] as double;
+        return RestockWorkflowInsight(
+          pointKey: entry['pointKey'] as String,
+          pointName: entry['pointName'] as String,
+          totalSeconds: spent,
+          visits: visits,
+          averageSeconds: visits == 0 ? 0 : spent / visits,
+          shareOfWorkflow: totalSeconds == 0 ? 0 : spent / totalSeconds,
+          optimizationHint: entry['optimizationHint'] as String,
+          monetizationHint: entry['monetizationHint'] as String,
+        );
+      })
+      .toList()
+    ..sort((a, b) => b.totalSeconds.compareTo(a.totalSeconds));
 }
 
 List<ExpiryPriorityInsight> _aggregateExpiryPriorityActions(
@@ -512,6 +602,20 @@ class UsageTrackingService {
         .toList();
     // ── ISOLATE ───────────────────────────────────────────────────────────
     return compute(_aggregateFeatureUsage, rows);
+  }
+
+  /// BQ9 — workflow de reabastecimiento: puntos con más tiempo de decisión.
+  Future<List<RestockWorkflowInsight>> getRestockWorkflowInsights({
+    int limitDays = 30,
+  }) async {
+    final cutoff = DateTime.now()
+        .subtract(Duration(days: limitDays))
+        .millisecondsSinceEpoch;
+    final rows = _sessions.values
+        .where((m) => (m['started_at'] as int) >= cutoff)
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    return Future.value(_aggregateRestockWorkflow(rows));
   }
 
   /// BQ4 — productos priorizados para venta/eliminacion por proximidad a caducar

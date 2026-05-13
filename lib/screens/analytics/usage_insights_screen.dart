@@ -10,7 +10,7 @@ import '../../services/usage_tracking_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UsageInsightsScreen
-// Sprint 3 Business Questions: BQ1 · BQ5 · BQ7 · BQ8
+// Sprint 3 Business Questions: BQ1 · BQ5 · BQ7 · BQ8 · BQ9
 // ─────────────────────────────────────────────────────────────────────────────
 
 class UsageInsightsScreen extends ConsumerStatefulWidget {
@@ -28,7 +28,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 5, vsync: this);
     UsageTrackingService.shared.trackFeatureUsed('usageInsights');
   }
 
@@ -43,6 +43,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
     ref.read(bq5Provider.notifier).refresh();
     ref.read(bq7Provider.notifier).refresh();
     ref.read(bq8Provider.notifier).refresh();
+    ref.read(bq9Provider.notifier).refresh();
   }
 
   @override
@@ -59,7 +60,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
             Text('Uso & Analítica',
                 style: AppTypography.headline
                     .copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
-            Text('Sprint 3 — BQ1 · BQ5 · BQ7 · BQ8',
+            Text('Sprint 3 — BQ1 · BQ5 · BQ7 · BQ8 · BQ9',
                 style: AppTypography.caption2
                     .copyWith(color: Colors.white54)),
           ],
@@ -88,6 +89,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
             Tab(text: 'Horas Pico'),
             Tab(text: 'Escaneo vs Manual'),
             Tab(text: 'Funciones'),
+            Tab(text: 'Workflow'),
           ],
         ),
       ),
@@ -98,6 +100,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
           _BQ5Tab(),
           _BQ7Tab(),
           _BQ8Tab(),
+          _BQ9Tab(),
         ],
       ),
     );
@@ -1084,6 +1087,7 @@ class _BQ8Tab extends ConsumerWidget {
     'reports':           'Exportar Reportes',
     'usageInsights':     'Uso & Analítica',
     'restockSuggestions':'Sugerencias de Reabasto',
+    'restockWorkflowInsights': 'Workflow de Reabastecimiento',
   };
 
   static const _icons = <String, IconData>{
@@ -1095,6 +1099,7 @@ class _BQ8Tab extends ConsumerWidget {
     'reports':           Icons.file_download_rounded,
     'usageInsights':     Icons.insights_rounded,
     'restockSuggestions':Icons.refresh_rounded,
+    'restockWorkflowInsights': Icons.route_rounded,
   };
 
   static const _palette = [
@@ -1400,4 +1405,263 @@ class _FeatureRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BQ9 — Workflow de reabastecimiento (tiempo de decisión)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _BQ9Tab extends ConsumerStatefulWidget {
+  const _BQ9Tab();
+
+  @override
+  ConsumerState<_BQ9Tab> createState() => _BQ9TabState();
+}
+
+class _BQ9TabState extends ConsumerState<_BQ9Tab> {
+  bool _tracked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _tracked) return;
+      _tracked = true;
+      UsageTrackingService.shared.trackFeatureUsed('restockWorkflowInsights');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bq9 = ref.watch(bq9Provider);
+    final isDark = context.isDark;
+
+    return _TabScaffold(
+      bqTag: 'BQ9 · TIPO 2',
+      tagColor: const Color(0xFFEC4899),
+      title: 'Puntos del workflow donde más tiempo se decide el reabastecimiento',
+      description: '¿En qué puntos del inventario el usuario demora más al decidir reabastecer, y cómo podemos optimizar o monetizar esos momentos?',
+      body: bq9.when(
+        loading: () => const _SectionCard(child: _LoadingState()),
+        error: (e, _) => _InsightBanner(
+          text: 'Error al cargar: $e',
+          color: AppColors.error,
+          icon: Icons.error_outline_rounded,
+        ),
+        data: (dashboard) {
+          if (dashboard.points.isEmpty) {
+            return _SectionCard(
+              child: _EmptyState(
+                icon: Icons.route_outlined,
+                message: 'Abre la lista de productos, revisa el detalle de un producto y entra a Reabastecimiento\npara generar este análisis de decisiones.',
+              ),
+            );
+          }
+
+          final top = dashboard.points.first;
+          final share = (top.shareOfWorkflow * 100).toStringAsFixed(0);
+
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'Tiempo total',
+                      value: _formatSeconds(dashboard.totalDecisionSeconds),
+                      icon: Icons.schedule_rounded,
+                      color: const Color(0xFFEC4899),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'Sesiones analizadas',
+                      value: '${dashboard.totalSessions}',
+                      icon: Icons.analytics_rounded,
+                      color: AppColors.success,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MetricTile(
+                      label: 'Punto líder',
+                      value: top.pointName,
+                      icon: Icons.flag_rounded,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _InsightBanner(
+                color: const Color(0xFFEC4899),
+                icon: Icons.insights_rounded,
+                text: 'El mayor tiempo de decisión se concentra en ${top.pointName.toLowerCase()} ($share% del flujo). Ahí es donde conviene reducir fricción y capturar valor comercial.',
+              ),
+              const SizedBox(height: 12),
+              _SectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _SectionHeader(
+                      label: 'Ranking del workflow',
+                      color: Color(0xFFEC4899),
+                    ),
+                    const SizedBox(height: 14),
+                    ...dashboard.points.asMap().entries.map((entry) {
+                      final point = entry.value;
+                      final color = [
+                        const Color(0xFFEC4899),
+                        AppColors.warning,
+                        AppColors.freshSky,
+                      ][entry.key % 3];
+                      final ratio = top.totalSeconds == 0
+                          ? 0.0
+                          : (point.totalSeconds / top.totalSeconds).clamp(0.0, 1.0);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(Icons.fiber_manual_record_rounded, size: 16, color: color),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        point.pointName,
+                                        style: AppTypography.caption.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark
+                                              ? AppColors.darkTextPrimary
+                                              : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${_formatSeconds(point.totalSeconds)} · ${point.visits} visitas · ${_formatSeconds(point.averageSeconds)} promedio',
+                                        style: AppTypography.caption2.copyWith(
+                                          color: isDark
+                                              ? AppColors.darkTextTertiary
+                                              : AppColors.textTertiary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  '${(point.shareOfWorkflow * 100).toStringAsFixed(0)}%',
+                                  style: AppTypography.caption.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: ratio,
+                                minHeight: 8,
+                                backgroundColor: isDark
+                                    ? AppColors.darkSurfaceSecondary
+                                    : AppColors.surfaceSecondary,
+                                valueColor: AlwaysStoppedAnimation(color),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _SectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _SectionHeader(
+                      label: 'Optimización y monetización',
+                      color: Color(0xFFEC4899),
+                    ),
+                    const SizedBox(height: 12),
+                    ...dashboard.points.map((point) {
+                      final accent = point.pointKey == top.pointKey
+                          ? const Color(0xFFEC4899)
+                          : AppColors.warning;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: isDark ? 0.14 : 0.08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: accent.withValues(alpha: 0.25)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              point.pointName,
+                              style: AppTypography.caption.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: accent,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Optimizar: ${point.optimizationHint}',
+                              style: AppTypography.caption.copyWith(
+                                color: isDark
+                                    ? AppColors.darkTextPrimary
+                                    : AppColors.textPrimary,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Monetizar: ${point.monetizationHint}',
+                              style: AppTypography.caption.copyWith(
+                                color: isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.textSecondary,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+String _formatSeconds(double value) {
+  final total = value.round();
+  final minutes = total ~/ 60;
+  final seconds = total % 60;
+  if (minutes == 0) {
+    return '${seconds}s';
+  }
+  return '$minutes m ${seconds.toString().padLeft(2, '0')} s';
 }

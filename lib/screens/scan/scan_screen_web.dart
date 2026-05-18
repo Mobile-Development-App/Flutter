@@ -59,6 +59,11 @@ class _ScanScreenWebState extends ConsumerState<ScanScreenWeb> {
         ref.read(inventoryProvider.notifier).findProductByBarcode(barcode);
 
     if (existing != null) {
+      await recordScanSession(
+        barcode: barcode,
+        foundInInventory: true,
+        productName: existing.name,
+      );
       setState(() {
         _result = ScanResult(
           barcode: barcode,
@@ -72,6 +77,12 @@ class _ScanScreenWebState extends ConsumerState<ScanScreenWeb> {
 
     // 2. Open Food Facts lookup
     final foodData = await OpenFoodFactsService.lookup(barcode);
+    await recordScanSession(
+      barcode: barcode,
+      foundInInventory: false,
+      productName: foodData?['name'] as String?,
+      brand: foodData?['brand'] as String?,
+    );
 
     setState(() {
       _result = ScanResult(

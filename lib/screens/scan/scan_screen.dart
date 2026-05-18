@@ -6,7 +6,8 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
-import '../../services/api_service.dart';
+import '../../storage/open_food_facts_lookup.dart';
+import '../../storage/persistence/scan_session_file_store.dart';
 import '../products/add_product_screen.dart';
 import '../products/product_detail_screen.dart';
 import 'scan_screen_mobile.dart';
@@ -16,26 +17,26 @@ import 'scan_screen_web.dart';
 // Open Food Facts lookup (gratuita, sin key)
 // ─────────────────────────────────────────────
 class OpenFoodFactsService {
-  static Future<Map<String, dynamic>?> lookup(String barcode) async {
-    try {
-      final url =
-          'https://world.openfoodfacts.org/api/v0/product/$barcode.json';
-      final res = await ApiService.shared.getExternal(url);
-      if (res == null) return null;
-      final status = res['status'] as int? ?? 0;
-      if (status != 1) return null;
-      final p = res['product'] as Map<String, dynamic>?;
-      if (p == null) return null;
-      return {
-        'name': p['product_name'] as String? ??
-            p['product_name_es'] as String? ?? '',
-        'brand': p['brands'] as String? ?? '',
-        'imageUrl': p['image_url'] as String?,
-      };
-    } catch (_) {
-      return null;
-    }
-  }
+  static Future<Map<String, dynamic>?> lookup(String barcode) =>
+      OpenFoodFactsLookup.lookup(barcode);
+}
+
+/// Registra el escaneo en archivo local (lib/storage).
+Future<void> recordScanSession({
+  required String barcode,
+  required bool foundInInventory,
+  String? productName,
+  String? brand,
+}) async {
+  await ScanSessionFileStore.shared.append(
+    ScanSessionEntry(
+      barcode: barcode,
+      productName: productName,
+      brand: brand,
+      scannedAt: DateTime.now(),
+      foundInInventory: foundInInventory,
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────

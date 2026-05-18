@@ -20,6 +20,7 @@ import 'services/usage_tracking_service.dart';
 import 'services/analytics_worker_service.dart';
 import 'services/local_store_service.dart';
 import 'services/search_history_cache.dart';
+import 'storage/storage_initializer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +42,7 @@ void main() async {
     await ConnectivityService.shared.init();
     await OfflineQueueService.shared.init();
     await CacheService.shared.init();
+    await StorageInitializer.init();
 
     // Inicializar notificaciones locales (canales Android + config iOS).
     // El permiso real se pide cuando el usuario activa el toggle en Ajustes.

@@ -9,6 +9,7 @@ import '../stores/store_management_screen.dart'
     show StoreManagementScreen, TeamMembersScreen;
 import 'help_center_screen.dart'
     show HelpCenterScreen, LanguageSettingsScreen, SecurityScreen;
+import 'storage_cache_reference_screen.dart';
 
 // ─────────────────────────────────────────────
 // SettingsScreen
@@ -100,6 +101,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 color: AppColors.success,
                 onTap: () =>
                     _push(context, const SecurityScreen()),
+              ),
+            ], isDark),
+            const SizedBox(height: 16),
+            // Technical reference (rúbrica — no altera inventario)
+            _sectionLabel('Desarrollo'),
+            _card([
+              _navRow(
+                icon: Icons.phone_android_rounded,
+                title: 'Datos en el dispositivo',
+                color: AppColors.deepSpaceBlue,
+                onTap: () => _push(
+                  context,
+                  const StorageCacheReferenceScreen(),
+                ),
               ),
             ], isDark),
             const SizedBox(height: 16),

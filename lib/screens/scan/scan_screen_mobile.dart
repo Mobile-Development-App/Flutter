@@ -162,6 +162,11 @@ class _ScanScreenMobileState extends ConsumerState<ScanScreenMobile>
         .findProductByBarcode(barcode);
 
     if (existing != null) {
+      await recordScanSession(
+        barcode: barcode,
+        foundInInventory: true,
+        productName: existing.name,
+      );
       if (mounted) {
         setState(() {
           _result = ScanResult(
@@ -175,6 +180,12 @@ class _ScanScreenMobileState extends ConsumerState<ScanScreenMobile>
     }
 
     final foodData = await OpenFoodFactsService.lookup(barcode);
+    await recordScanSession(
+      barcode: barcode,
+      foundInInventory: false,
+      productName: foodData?['name'] as String?,
+      brand: foodData?['brand'] as String?,
+    );
     if (mounted) {
       setState(() {
         _result = ScanResult(

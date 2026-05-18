@@ -15,6 +15,10 @@ import '../core/utils/extensions.dart';
 import '../services/motion_vibration_service.dart';
 import '../services/notification_service.dart';
 import '../services/usage_tracking_service.dart'; // BQ6 — tracking de correcciones e inventario automático
+import '../storage/cache/dashboard_snapshot_store.dart';
+import '../storage/cache/inventory_movements_cache.dart';
+import '../storage/persistence/alerts_read_preferences_store.dart';
+import '../storage/persistence/inventory_sqlite_mirror.dart';
 import 'settings_provider.dart';
 
 // ─────────────────────────────────────────────
@@ -261,6 +265,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
           .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
           .toList();
       await _cache.put(CacheKeys.products, list);
+      await InventorySqliteMirror.shared.mirrorProducts(products);
       debugPrint('[Inventory] products from API (${products.length}) → cached');
       return products;
     } catch (e) {
@@ -284,9 +289,12 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     final cached = _cache.get(CacheKeys.alerts);
     if (cached != null) {
       try {
-        final alerts = (cached as List)
-            .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
-            .toList();
+        final alerts = await _mergePendingAlertReads(
+          (cached as List)
+              .map((e) =>
+                  InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
+              .toList(),
+        );
         debugPrint('[Inventory] cache HIT alerts (${alerts.length})');
         return alerts;
       } catch (_) {
@@ -298,9 +306,10 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
       debugPrint('[Inventory] GET $kAlerts');
       final data = await _api.get(kAlerts) as dynamic;
       final list = _extractList(data);
-      final alerts = list
+      var alerts = list
           .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
           .toList();
+      alerts = await _mergePendingAlertReads(alerts);
       await _cache.put(CacheKeys.alerts, list);
       debugPrint('[Inventory] alerts from API (${alerts.length}) → cached');
       return alerts;
@@ -336,8 +345,13 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
       final data = await _api.get(kAnalyticsDashboard) as Map<String, dynamic>?;
       if (data == null) return null;
       await _cache.put(CacheKeys.dashboard, data);
+      final stats = _parseDashboardStats(data);
+      final storeId = _api.storeId;
+      if (storeId != null) {
+        await DashboardSnapshotStore.shared.save(storeId, stats);
+      }
       debugPrint('[Inventory] dashboard from API → cached');
-      return _parseDashboardStats(data);
+      return stats;
     } catch (e) {
       debugPrint('[Inventory] fetchDashboard failed: $e');
       final stale = _cache.get(CacheKeys.dashboard, allowStale: true);
@@ -346,8 +360,22 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
           return _parseDashboardStats(stale as Map<String, dynamic>);
         } catch (_) {}
       }
+      final storeId = _api.storeId;
+      if (storeId != null) {
+        return DashboardSnapshotStore.shared.load(storeId);
+      }
       return null;
     }
+  }
+
+  Future<List<InventoryAlert>> _mergePendingAlertReads(
+    List<InventoryAlert> alerts,
+  ) async {
+    final pending = await AlertsReadPreferencesStore.shared.pendingReadIds();
+    if (pending.isEmpty) return alerts;
+    return alerts
+        .map((a) => pending.contains(a.id) ? a.copyWith(isRead: true) : a)
+        .toList();
   }
 
   DashboardStats _parseDashboardStats(Map<String, dynamic> data) {
@@ -632,6 +660,11 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
     } catch (e) {
       debugPrint('[Inventory] restockProduct API failed, updating locally: $e');
     }
+    await InventoryMovementsCache.shared.invalidate(productId);
+    await InventorySqliteMirror.shared.recordRestockMovement(
+      productId: productId,
+      quantity: quantity,
+    );
     final s   = state.value!;
     final idx = s.products.indexWhere((p) => p.id == productId);
     if (idx == -1) return;
@@ -664,7 +697,11 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
   // ── Alerts ────────────────────────────────
 
   Future<void> markAlertAsRead(InventoryAlert alert) async {
-    try { await _api.patch('$kAlerts/${alert.id}/read', {}); } catch (_) {}
+    try {
+      await _api.patch('$kAlerts/${alert.id}/read', {});
+    } catch (_) {
+      await AlertsReadPreferencesStore.shared.markRead(alert.id);
+    }
     final s       = state.value!;
     final updated = s.alerts
         .map((a) => a.id == alert.id ? a.copyWith(isRead: true) : a)
@@ -673,8 +710,13 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
   }
 
   Future<void> markAllAlertsAsRead() async {
-    try { await _api.post('$kAlerts/mark-all-read', {}); } catch (_) {}
-    final s       = state.value!;
+    final s = state.value!;
+    try {
+      await _api.post('$kAlerts/mark-all-read', {});
+    } catch (_) {
+      await AlertsReadPreferencesStore.shared
+          .markAllRead(s.alerts.map((a) => a.id));
+    }
     final updated = s.alerts.map((a) => a.copyWith(isRead: true)).toList();
     _update((_) => s.copyWith(alerts: updated));
   }

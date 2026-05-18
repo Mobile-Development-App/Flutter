@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/bq_cache_service.dart';
 import '../services/usage_tracking_service.dart';
+import '../storage/inventory_movements_fetcher.dart';
 import 'connectivity_provider.dart'; // ← connectivityProvider vive aquí (Sprint 4)
 import 'inventory_provider.dart';
 
@@ -211,16 +212,8 @@ class BQ3Notifier extends AsyncNotifier<BQ3Dashboard> {
     return dashboard;
   }
 
-  Future<List<InventoryMovement>> _loadMovementsForProduct(String productId) async {
-    final data = await ApiService.shared.get(kInventoryMovements, query: {'productId': productId});
-    final list = _extractList(data);
-    return list
-        .whereType<Map>()
-        .map((e) => InventoryMovement.fromBackendJson(e.cast<String, dynamic>()))
-        .where((m) => m.productId == productId)
-        .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-  }
+  Future<List<InventoryMovement>> _loadMovementsForProduct(String productId) =>
+      InventoryMovementsFetcher.fetchForProduct(productId);
 
   List<dynamic> _extractList(dynamic data) {
     if (data is List) return data;

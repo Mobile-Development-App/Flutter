@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/constants/api_constants.dart';
 import '../models/models.dart';
-import '../services/api_service.dart';
+import '../storage/inventory_movements_fetcher.dart';
 import 'inventory_provider.dart';
 
 @immutable
@@ -18,36 +17,8 @@ class RestockLatencyInfo {
 }
 
 final inventoryMovementsProvider =
-    FutureProvider.family<List<InventoryMovement>, String>((ref, productId) async {
-  final api = ApiService.shared;
-  final data = await api.get(
-    kInventoryMovements,
-    query: {'productId': productId},
-  );
-
-  List<dynamic> list;
-  if (data is List) {
-    list = data;
-  } else if (data is Map<String, dynamic>) {
-    list = (data['data'] as List?) ??
-        (data['items'] as List?) ??
-        (data['movements'] as List?) ??
-        (data['results'] as List?) ??
-        const [];
-  } else {
-    list = const [];
-  }
-
-  final movements = list
-      .whereType<Map>()
-      .map((e) => InventoryMovement.fromBackendJson(
-            e.cast<String, dynamic>(),
-          ))
-      .where((m) => m.productId == productId)
-      .toList()
-    ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-  return movements;
+    FutureProvider.family<List<InventoryMovement>, String>((ref, productId) {
+  return InventoryMovementsFetcher.fetchForProduct(productId);
 });
 
 final restockLatencyProvider =

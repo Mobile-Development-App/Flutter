@@ -11,6 +11,7 @@ import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../providers/restock_latency_provider.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/map_offline_banner.dart';
 import 'add_product_screen.dart';
 // Sprint 3 — BQ5: screen session tracking
 import '../../core/utils/screen_tracker_mixin.dart';
@@ -658,7 +659,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen>
   }
 }
 
-class _CoordinateMapViewScreen extends StatelessWidget {
+class _CoordinateMapViewScreen extends ConsumerWidget {
   final double latitude;
   final double longitude;
 
@@ -668,36 +669,45 @@ class _CoordinateMapViewScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final point = LatLng(latitude, longitude);
+    final isOnline = ref.watch(connectivityProvider).value ?? true;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Ubicación del producto')),
-      body: FlutterMap(
-        options: MapOptions(
-          initialCenter: point,
-          initialZoom: 16,
-        ),
+      body: Column(
         children: [
-          TileLayer(
-            urlTemplate:
-                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-            subdomains: const ['a', 'b', 'c', 'd'],
-            userAgentPackageName: 'com.inventaria.app',
-          ),
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: point,
-                width: 46,
-                height: 46,
-                child: const Icon(
-                  Icons.location_pin,
-                  size: 46,
-                  color: Colors.red,
-                ),
+          Expanded(
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: point,
+                initialZoom: 16,
               ),
-            ],
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
+                  userAgentPackageName: 'com.inventaria.app',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: point,
+                      width: 46,
+                      height: 46,
+                      child: const Icon(
+                        Icons.location_pin,
+                        size: 46,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
+          if (!isOnline) const MapOfflineBanner(),
         ],
       ),
     );

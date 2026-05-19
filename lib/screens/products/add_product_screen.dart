@@ -14,6 +14,7 @@ import '../../services/api_service.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/map_offline_banner.dart';
 import '../../services/usage_tracking_service.dart';
 
 /// Formatter que permite solo dígitos enteros (sin decimales).
@@ -1029,7 +1030,7 @@ class _PickedLocationResult {
   });
 }
 
-class _LocationPickerScreen extends StatefulWidget {
+class _LocationPickerScreen extends ConsumerStatefulWidget {
   final double? initialLatitude;
   final double? initialLongitude;
 
@@ -1039,10 +1040,11 @@ class _LocationPickerScreen extends StatefulWidget {
   });
 
   @override
-  State<_LocationPickerScreen> createState() => _LocationPickerScreenState();
+  ConsumerState<_LocationPickerScreen> createState() =>
+      _LocationPickerScreenState();
 }
 
-class _LocationPickerScreenState extends State<_LocationPickerScreen> {
+class _LocationPickerScreenState extends ConsumerState<_LocationPickerScreen> {
   static const LatLng _fallbackPoint = LatLng(4.60971, -74.08175);
   late final MapController _mapController;
   late LatLng _selectedPoint;
@@ -1113,6 +1115,8 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isOnline = ref.watch(connectivityProvider).value ?? true;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Seleccionar ubicación'),
@@ -1161,6 +1165,7 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
               ],
             ),
           ),
+          if (!isOnline) const MapOfflineBanner(),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),

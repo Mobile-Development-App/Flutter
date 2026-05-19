@@ -9,3 +9,4 @@ export 'search_bar.dart';
 export 'stat_card.dart';
 export 'protected_route.dart';
 export 'connectivity_status_bar.dart'; // Sprint 5 — Eventual Connectivity UI
+export 'map_offline_banner.dart';

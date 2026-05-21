@@ -147,9 +147,30 @@ final eventualConnectivityStatusProvider =
       ],
     ),
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // FUNCIONALIDAD: Inventory Health Score
-    // ─────────────────────────────────────────────────────────────────────────
+    FunctionalityConnectivityStatus(
+      name: 'Conteo físico de inventario',
+      description:
+          'Sesiones de conteo en góndola; ajustes de stock al reconectar.',
+      supportsOfflineRead: true,
+      supportsOfflineWrite: true,
+      hasAutoSync: true,
+      storageBackend: 'Hive (sesiones + cola sync)',
+      cacheStrategy: 'StockCountSummaryCache L1 LRU + L2 Hive (6 h)',
+      syncMechanism:
+          'Cola pending_sync + inventoryProvider.updateProduct al reconectar',
+      relatedProviders: [
+        'stockCountProvider',
+        'inventoryProvider',
+        'connectivityProvider',
+      ],
+      relatedServices: [
+        'StockCountLocalStore',
+        'StockCountProcessingService',
+        'StockCountSummaryCache',
+        'ConnectivityService',
+      ],
+    ),
+
     FunctionalityConnectivityStatus(
       name: 'Inventory Health Score',
       description:

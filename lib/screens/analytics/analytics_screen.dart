@@ -14,6 +14,7 @@ import '../../widgets/app_card.dart';
 import '../../services/usage_tracking_service.dart';
 import 'usage_insights_screen.dart';
 import 'business_questions_screen.dart';
+import '../inventory/location_walk_screen.dart';
 import '../inventory/stock_count_screen.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
@@ -55,6 +56,15 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       appBar: AppBar(
         title: const Text('Analítica'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.map_rounded),
+            tooltip: 'Recorrido por ubicación',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const LocationWalkScreen(),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.fact_check_rounded),
             tooltip: 'Conteo en góndola',

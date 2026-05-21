@@ -1,0 +1,75 @@
+import 'dart:convert';
+
+import 'package:hive_flutter/hive_flutter.dart';
+
+import '../../core/utils/lru_cache.dart';
+import '../../models/stock_count.dart';
+
+class StockCountSummaryCache {
+  StockCountSummaryCache._();
+  static final StockCountSummaryCache shared = StockCountSummaryCache._();
+
+  static const _boxName = 'stock_count_summary_cache_v1';
+  static const _ttl = Duration(hours: 6);
+  static const _l1Capacity = 5;
+
+  final LRUCache<String, _Entry> _l1 = LRUCache(_l1Capacity);
+  late Box<String> _box;
+  bool _ready = false;
+
+  Future<void> init() async {
+    if (_ready) return;
+    _box = await Hive.openBox<String>(_boxName);
+    _ready = true;
+  }
+
+  Future<StockCountSummary?> read(String storeKey) async {
+    if (!_ready) return null;
+
+    final mem = _l1.get(storeKey);
+    if (mem != null && !mem.isExpired) return mem.summary;
+    if (mem != null) _l1.remove(storeKey);
+
+    final raw = _box.get(storeKey);
+    if (raw == null) return null;
+
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      final savedAt = DateTime.parse(map['savedAt'] as String);
+      if (DateTime.now().difference(savedAt) > _ttl) {
+        await _box.delete(storeKey);
+        return null;
+      }
+      final summary = StockCountSummary.fromJson(
+          Map<String, dynamic>.from(map['summary'] as Map));
+      _l1.put(storeKey, _Entry(summary: summary, savedAt: savedAt));
+      return summary;
+    } catch (_) {
+      await _box.delete(storeKey);
+      return null;
+    }
+  }
+
+  Future<void> save(String storeKey, StockCountSummary summary) async {
+    if (!_ready) return;
+    final savedAt = DateTime.now();
+    _l1.put(storeKey, _Entry(summary: summary, savedAt: savedAt));
+    await _box.put(
+      storeKey,
+      jsonEncode({
+        'savedAt': savedAt.toIso8601String(),
+        'summary': summary.toJson(),
+      }),
+    );
+  }
+}
+
+class _Entry {
+  final StockCountSummary summary;
+  final DateTime savedAt;
+
+  _Entry({required this.summary, required this.savedAt});
+
+  bool get isExpired =>
+      DateTime.now().difference(savedAt) > StockCountSummaryCache._ttl;
+}

@@ -14,7 +14,7 @@ import '../../widgets/app_card.dart';
 import '../../services/usage_tracking_service.dart';
 import 'usage_insights_screen.dart';
 import 'business_questions_screen.dart';
-import 'inventory_health_screen.dart'; // Sprint 4 — New Feature
+import '../inventory/stock_count_screen.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -55,13 +55,12 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       appBar: AppBar(
         title: const Text('Analítica'),
         actions: [
-          // Sprint 4 — New Feature: Salud del Inventario (4 Isolates en paralelo)
           IconButton(
-            icon: const Icon(Icons.health_and_safety_rounded),
-            tooltip: 'Salud del Inventario',
+            icon: const Icon(Icons.fact_check_rounded),
+            tooltip: 'Conteo en góndola',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const InventoryHealthScreen(),
+                builder: (_) => const StockCountScreen(),
               ),
             ),
           ),

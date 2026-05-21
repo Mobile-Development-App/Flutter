@@ -72,6 +72,9 @@ class _StorageCacheReferenceScreenState
 
     const cajas = [
       'api_cache',
+      'stock_count_sessions_v1',
+      'stock_count_summary_cache_v1',
+      'stock_count_pending_sync_v1',
       'movements_cache_v1',
       'open_food_facts_v1',
       'dashboard_snapshot_v1',
@@ -202,6 +205,22 @@ class _StorageCacheReferenceScreenState
                         'unas horas porque tardan en generarse. LRU pequeño (10) '
                         'y SharedPreferences por tienda.\n\n'
                         'Código: lib/storage/cache/restock_suggestions_cache.dart',
+                      ),
+                    ),
+                    _divider(),
+                    _filaTappable(
+                      isDark: isDark,
+                      icon: Icons.fact_check_outlined,
+                      title: 'Conteo físico',
+                      subtitle: 'Sesiones Hive + resumen LRU, 6 h.',
+                      color: AppColors.deepSpaceBlue,
+                      onTap: () => _mostrarDetalle(
+                        context,
+                        'Conteo físico',
+                        'Inventario → Conteo físico guarda cada sesión en Hive. '
+                        'Al finalizar, 4 isolates calculan coincidencias y diferencias. '
+                        'Sin red, los ajustes quedan en cola hasta sincronizar.\n\n'
+                        'Código: lib/storage/persistence/stock_count_local_store.dart',
                       ),
                     ),
                   ]),

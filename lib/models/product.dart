@@ -368,15 +368,27 @@ class Product {
     );
   }
 
+  int? get daysUntilExpiration {
+    if (expirationDate == null) return null;
+    final exp = DateTime(
+      expirationDate!.year,
+      expirationDate!.month,
+      expirationDate!.day,
+    );
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return exp.difference(today).inDays;
+  }
+
   bool get isExpiringSoon {
-    if (expirationDate == null) return false;
-    final remaining = expirationDate!.difference(DateTime.now());
-    return remaining.inSeconds > 0 && remaining.inDays <= 30;
+    final days = daysUntilExpiration;
+    if (days == null) return false;
+    return days >= 0 && days <= 30;
   }
 
   bool get isExpired {
-    if (expirationDate == null) return false;
-    return expirationDate!.isBefore(DateTime.now());
+    final days = daysUntilExpiration;
+    return days != null && days < 0;
   }
 
   factory Product.fromBackendJson(Map<String, dynamic> json) => Product(
@@ -400,7 +412,17 @@ class Product {
             ApiService.parseDate(json['createdAt']) ??
             DateTime.now(),
         isActive: !(json['isDeleted'] as bool? ?? false),
+        expirationDate: _parseExpirationFromBackend(json),
       );
+
+  static DateTime? _parseExpirationFromBackend(Map<String, dynamic> json) {
+    final raw = json['expirationDate'] ??
+        json['expiration_date'] ??
+        json['expiresAt'] ??
+        json['expiryDate'];
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString());
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
         id: json['id'] as String? ?? '',
@@ -467,6 +489,8 @@ class Product {
         'unit': description,
         'imageUrl': imageURL,
         'storeId': storeId,
+        if (expirationDate != null)
+          'expirationDate': expirationDate!.toIso8601String(),
       };
 
   Product copyWith({

@@ -7,4 +7,6 @@ export 'order.dart';
 export 'product.dart';
 export 'store.dart';
 export 'supplier.dart';
+export 'stock_count.dart';
+export 'location_walk.dart';
 export 'user.dart';

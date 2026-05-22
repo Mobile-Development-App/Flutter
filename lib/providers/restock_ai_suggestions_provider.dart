@@ -6,6 +6,8 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/openai_restock_service.dart';
+import '../storage/cache/restock_suggestions_cache.dart';
+import '../storage/inventory_movements_fetcher.dart';
 import 'inventory_provider.dart';
 
 class RestockAiSuggestionCard {
@@ -56,30 +58,8 @@ int _salesQtyLastDays(List<InventoryMovement> movements, int days) {
 Future<List<InventoryMovement>> _fetchMovementsForProduct(
   ApiService api,
   String productId,
-) async {
-  final data = await api.get(
-    kInventoryMovements,
-    query: {'productId': productId},
-  );
-
-  List<dynamic> list;
-  if (data is List) {
-    list = data;
-  } else if (data is Map<String, dynamic>) {
-    list = (data['data'] as List?) ??
-        (data['items'] as List?) ??
-        (data['movements'] as List?) ??
-        (data['results'] as List?) ??
-        const [];
-  } else {
-    list = const [];
-  }
-
-  return list
-      .whereType<Map>()
-      .map((e) => InventoryMovement.fromBackendJson(e.cast<String, dynamic>()))
-      .toList();
-}
+) =>
+    InventoryMovementsFetcher.fetchForProduct(productId);
 
 RestockAiSuggestionCard _buildReplacementCard({
   required Product neverSold,
@@ -361,6 +341,21 @@ final restockAiSuggestionsProvider =
     }
 
     try {
+      final storeKey = api.storeId ?? 'default';
+      final cachedRows = await RestockSuggestionsCache.shared.read(storeKey);
+      if (cachedRows != null && cachedRows.isNotEmpty) {
+        final cachedCards = cachedRows
+            .map(_cardFromRestockApiRow)
+            .whereType<RestockAiSuggestionCard>()
+            .toList();
+        if (cachedCards.isNotEmpty) {
+          return RestockAiSuggestionsState(
+            isAi: true,
+            cards: _mergeBackendAndLocal(cachedCards, localCards),
+          );
+        }
+      }
+
       // Backend: GET /restock/suggestions → { data: RestockSuggestion[] }
       final res = await api.get(kRestockSuggestions);
       final rawList = _extractList(res);
@@ -376,6 +371,10 @@ final restockAiSuggestionsProvider =
           .toList();
 
       if (fromApiRows.isNotEmpty) {
+        await RestockSuggestionsCache.shared.save(
+          storeKey,
+          rawList.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList(),
+        );
         final merged = _mergeBackendAndLocal(fromApiRows, localCards);
         return RestockAiSuggestionsState(isAi: true, cards: merged);
       }

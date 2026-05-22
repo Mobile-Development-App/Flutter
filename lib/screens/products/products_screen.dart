@@ -7,6 +7,8 @@ import '../../providers/providers.dart';
 import '../../widgets/widgets.dart';
 import 'add_product_screen.dart';
 import 'product_detail_screen.dart';
+import '../inventory/location_walk_screen.dart';
+import '../inventory/stock_count_screen.dart';
 // Sprint 3 — BQ5: screen session tracking
 import '../../core/utils/screen_tracker_mixin.dart';
 
@@ -46,6 +48,22 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen>
       appBar: AppBar(
         title: const Text('Productos'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.map_rounded),
+            tooltip: 'Recorrido por ubicación',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LocationWalkScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.fact_check_rounded),
+            tooltip: 'Conteo en góndola',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const StockCountScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.add_rounded),
             onPressed: () => _showAddProduct(context),

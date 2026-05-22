@@ -2,12 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/constants/api_constants.dart';
 import '../models/models.dart';
-import '../services/api_service.dart';
 import '../services/bq_cache_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/usage_tracking_service.dart';
+import '../storage/inventory_movements_fetcher.dart';
 import 'inventory_provider.dart';
 
 class BQ3ProductInsight {
@@ -225,31 +224,8 @@ class BQ3Notifier extends AsyncNotifier<BQ3Dashboard> {
     }
   }
 
-  Future<List<InventoryMovement>> _loadMovementsForProduct(String productId) async {
-    if (!ConnectivityService.shared.isOnline) {
-      return const <InventoryMovement>[];
-    }
-    try {
-      final data = await ApiService.shared.get(kInventoryMovements, query: {'productId': productId});
-      final list = _extractList(data);
-      return list
-          .whereType<Map>()
-          .map((e) => InventoryMovement.fromBackendJson(e.cast<String, dynamic>()))
-          .where((m) => m.productId == productId)
-          .toList()
-        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    } catch (_) {
-      return const <InventoryMovement>[];
-    }
-  }
-
-  List<dynamic> _extractList(dynamic data) {
-    if (data is List) return data;
-    if (data is Map<String, dynamic>) {
-      return (data['data'] as List?) ?? (data['items'] as List?) ?? (data['movements'] as List?) ?? (data['results'] as List?) ?? const [];
-    }
-    return const [];
-  }
+  Future<List<InventoryMovement>> _loadMovementsForProduct(String productId) =>
+      InventoryMovementsFetcher.fetchForProduct(productId);
 
   Map<String, dynamic> _toCacheBQ3(BQ3Dashboard dashboard) => {
         'averageDays': dashboard.averageDays,

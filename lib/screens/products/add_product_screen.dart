@@ -693,8 +693,6 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       );
               },
               errorBuilder: (_, __, ___) {
-                // Antipatrón corregido: no llamar setState durante build.
-                // addPostFrameCallback garantiza que el frame terminó.
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted && !_imageError) setState(() => _imageError = true);
                 });

@@ -15,6 +15,7 @@ import '../products/product_detail_screen.dart';
 import '../products/products_screen.dart';
 import '../restock/restock_screen.dart';
 import '../settings/settings_screen.dart';
+import '../inventory/location_walk_screen.dart';
 // Sprint 3 — BQ5: screen session tracking
 import '../../core/utils/screen_tracker_mixin.dart';
 
@@ -116,7 +117,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ],
                     // ── Expiring Products ──
                     if (ctx.expiringProducts.isNotEmpty) ...[
-                      _expiringSection(ctx, isDark),
+                      _expiringSection(context, ctx, isDark),
                       const SizedBox(height: 20),
                     ],
                     // ── Sales Chart ──
@@ -790,16 +791,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // ─────────────────────────────────────────────
   // Expiring Products
   // ─────────────────────────────────────────────
-  Widget _expiringSection(ContextState ctx, bool isDark) {
+  Widget _expiringSection(
+      BuildContext context, ContextState ctx, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader(
-          icon: Icons.access_time_rounded,
-          iconColor: const Color(0xFFFF9F0A),
-          title: 'Próximos a Vencer',
-          badge: '${ctx.expiringProducts.length}',
-          badgeColor: const Color(0xFFFF9F0A),
+        Row(
+          children: [
+            Expanded(
+              child: _sectionHeader(
+                icon: Icons.access_time_rounded,
+                iconColor: const Color(0xFFFF9F0A),
+                title: 'Próximos a Vencer',
+                badge: '${ctx.expiringProducts.length}',
+                badgeColor: const Color(0xFFFF9F0A),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LocationWalkScreen(),
+                ),
+              ),
+              child: const Text('Ver recorrido'),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         AppCard(
@@ -1069,16 +1086,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onTap: () => _showSheet(context, const ProductsScreen()),
             ),
             _actionTile(
-              icon: Icons.notifications_rounded,
-              title: 'Alertas',
-              subtitle: ctx.urgentAlerts.isNotEmpty
-                  ? '${ctx.urgentAlerts.length} sin leer'
-                  : 'Todo al día',
-              color: ctx.urgentAlerts.isNotEmpty
-                  ? const Color(0xFFFF9F0A)
-                  : AppColors.textSecondary,
+              icon: Icons.map_rounded,
+              title: 'Recorrido por ubicación',
+              subtitle: 'Marca pasillos revisados',
+              color: AppColors.freshSky,
               isDark: isDark,
-              onTap: () => _showSheet(context, const NotificationsScreen()),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LocationWalkScreen(),
+                ),
+              ),
             ),
           ],
         ),

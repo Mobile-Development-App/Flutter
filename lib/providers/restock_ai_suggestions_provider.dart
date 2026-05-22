@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/constants/api_constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/connectivity_service.dart';
 import '../services/openai_restock_service.dart';
 import '../storage/cache/restock_suggestions_cache.dart';
 import '../storage/inventory_movements_fetcher.dart';
@@ -283,6 +284,7 @@ final restockAiSuggestionsProvider =
 
     const neverSoldDaysWindow = 30;
     final api = ApiService.shared;
+    final isOnline = ConnectivityService.shared.isOnline;
 
     final allProducts = inv.products;
     final idsToCheck = <String>{};
@@ -299,7 +301,9 @@ final restockAiSuggestionsProvider =
     }
 
     final salesById = <String, int>{};
-    await _fillSalesByProductId(api, idsToCheck, neverSoldDaysWindow, salesById);
+    if (isOnline) {
+      await _fillSalesByProductId(api, idsToCheck, neverSoldDaysWindow, salesById);
+    }
 
     final localCards = _buildLocalFallback(
       allProducts: allProducts,
@@ -307,6 +311,10 @@ final restockAiSuggestionsProvider =
       neverSoldDaysWindow: neverSoldDaysWindow,
       salesByProductId: salesById,
     );
+
+    if (!isOnline) {
+      return RestockAiSuggestionsState(isAi: false, cards: localCards);
+    }
 
     final payload = _restockAiPayload(
       neverSoldDaysWindow: neverSoldDaysWindow,

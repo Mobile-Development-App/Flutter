@@ -24,11 +24,22 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
   ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
+class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedRange = 0;
   bool _analyticsTracked = false;
+  bool _animate = false;
 
   static const List<String> _ranges = ['7d', '30d', '90d', '1a'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _animate = true);
+    });
+  }
 
   int get _selectedDays {
     switch (_selectedRange) {
@@ -148,147 +159,159 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _rangeSelector(isDark),
-                const SizedBox(height: 18),
+                    _rangeSelector(isDark),
+                    const SizedBox(height: 18),
 
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _summaryCard(
-                        icon: Icons.attach_money_rounded,
-                        iconColor: AppColors.success,
-                        value: totalSales != null
-                            ? _compactCurrency(totalSales)
-                            : '—',
-                        title: 'Ventas del Período',
-                        subtitle: _labelRangeText(),
-                        subtitleColor: AppColors.textSecondary,
+                    AnimatedOpacity(
+                      opacity: _animate ? 1 : 0,
+                      duration: const Duration(milliseconds: 420),
+                      curve: Curves.easeOutQuad,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _summaryCard(
+                              icon: Icons.attach_money_rounded,
+                              iconColor: AppColors.success,
+                              value: totalSales != null
+                                  ? _compactCurrency(totalSales)
+                                  : '—',
+                              title: 'Ventas del Período',
+                              subtitle: _labelRangeText(),
+                              subtitleColor: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _summaryCard(
+                              icon: Icons.show_chart_rounded,
+                              iconColor: AppColors.deepSpaceBlue,
+                              value: averageDaily != null
+                                  ? _compactCurrency(averageDaily)
+                                  : '—',
+                              title: 'Promedio Diario',
+                              subtitle: '$_selectedDays días',
+                              subtitleColor: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _summaryCard(
+                              icon: Icons.shopping_bag_outlined,
+                              iconColor: AppColors.info,
+                              value: totalOrders != null ? '$totalOrders' : '—',
+                              title: 'Órdenes',
+                              subtitle: '${products.length} productos',
+                              subtitleColor: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _summaryCard(
-                        icon: Icons.show_chart_rounded,
-                        iconColor: AppColors.deepSpaceBlue,
-                        value: averageDaily != null
-                            ? _compactCurrency(averageDaily)
-                            : '—',
-                        title: 'Promedio Diario',
-                        subtitle: '$_selectedDays días',
-                        subtitleColor: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _summaryCard(
-                        icon: Icons.shopping_bag_outlined,
-                        iconColor: AppColors.info,
-                        value: totalOrders != null ? '$totalOrders' : '—',
-                        title: 'Órdenes',
-                        subtitle: '${products.length} productos',
-                        subtitleColor: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
 
-                const SizedBox(height: 22),
-                _chartCard(
+                    const SizedBox(height: 22),
+                    _chartCard(
                   title: 'Tendencia de Ventas',
                   trailing: _labelRangeText(),
                   child: salesData.isEmpty
-                      ? _emptySalesChartState()
-                      : SizedBox(
-                          height: 290,
-                          child: LineChart(
-                            LineChartData(
-                              minY: _minY(salesSpots),
-                              maxY: _maxY(salesSpots),
-                              gridData: FlGridData(
-                                show: true,
-                                drawVerticalLine: false,
-                                horizontalInterval: _horizontalStep(salesSpots),
-                                getDrawingHorizontalLine: (_) => FlLine(
-                                  color: Colors.grey.withValues(alpha: 0.15),
-                                  strokeWidth: 1,
-                                ),
-                              ),
-                              borderData: FlBorderData(show: false),
-                              titlesData: FlTitlesData(
-                                topTitles: const AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
-                                rightTitles: const AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 68,
-                                    interval: _horizontalStep(salesSpots),
-                                    getTitlesWidget: (value, meta) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(right: 6),
-                                        child: Text(
-                                          _compactCurrency(value),
-                                          style: AppTypography.caption2.copyWith(
-                                            color: AppColors.textSecondary,
-                                            fontSize: 10,
-                                          ),
-                                          textAlign: TextAlign.right,
-                                          maxLines: 1,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 28,
-                                    interval: 1,
-                                    getTitlesWidget: (value, meta) {
-                                      final index = value.toInt();
-                                      if (index < 0 || index >= salesData.length) {
-                                        return const SizedBox.shrink();
-                                      }
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: Text(
-                                          _xLabel(index, salesData),
-                                          style: AppTypography.caption2.copyWith(
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: salesSpots,
-                                  isCurved: true,
-                                  barWidth: 3,
-                                  color: const Color(0xFF083D68),
-                                  belowBarData: BarAreaData(
-                                    show: true,
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        const Color(0xFF083D68).withValues(alpha: 0.18),
-                                        const Color(0xFF083D68).withValues(alpha: 0.03),
-                                      ],
+                          ? AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: _emptySalesChartState(),
+                            )
+                          : AnimatedOpacity(
+                              duration: const Duration(milliseconds: 420),
+                              opacity: _animate ? 1 : 0,
+                              child: SizedBox(
+                                height: 290,
+                                child: LineChart(
+                                  LineChartData(
+                                    minY: _minY(salesSpots),
+                                    maxY: _maxY(salesSpots),
+                                    gridData: FlGridData(
+                                      show: true,
+                                      drawVerticalLine: false,
+                                      horizontalInterval: _horizontalStep(salesSpots),
+                                      getDrawingHorizontalLine: (_) => FlLine(
+                                        color: Colors.grey.withValues(alpha: 0.15),
+                                        strokeWidth: 1,
+                                      ),
                                     ),
+                                    borderData: FlBorderData(show: false),
+                                    titlesData: FlTitlesData(
+                                      topTitles: const AxisTitles(
+                                        sideTitles: SideTitles(showTitles: false),
+                                      ),
+                                      rightTitles: const AxisTitles(
+                                        sideTitles: SideTitles(showTitles: false),
+                                      ),
+                                      leftTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 68,
+                                          interval: _horizontalStep(salesSpots),
+                                          getTitlesWidget: (value, meta) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(right: 6),
+                                              child: Text(
+                                                _compactCurrency(value),
+                                                style: AppTypography.caption2.copyWith(
+                                                  color: AppColors.textSecondary,
+                                                  fontSize: 10,
+                                                ),
+                                                textAlign: TextAlign.right,
+                                                maxLines: 1,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 28,
+                                          interval: 1,
+                                          getTitlesWidget: (value, meta) {
+                                            final index = value.toInt();
+                                            if (index < 0 || index >= salesData.length) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Padding(
+                                              padding: const EdgeInsets.only(top: 8),
+                                              child: Text(
+                                                _xLabel(index, salesData),
+                                                style: AppTypography.caption2.copyWith(
+                                                  color: AppColors.textSecondary,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    lineBarsData: [
+                                      LineChartBarData(
+                                        spots: salesSpots,
+                                        isCurved: true,
+                                        barWidth: 3,
+                                        color: const Color(0xFF083D68),
+                                        belowBarData: BarAreaData(
+                                          show: true,
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              const Color(0xFF083D68).withValues(alpha: 0.18),
+                                              const Color(0xFF083D68).withValues(alpha: 0.03),
+                                            ],
+                                          ),
+                                        ),
+                                        dotData: const FlDotData(show: false),
+                                      ),
+                                    ],
                                   ),
-                                  dotData: const FlDotData(show: false),
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
                 ),
 
                 const SizedBox(height: 16),

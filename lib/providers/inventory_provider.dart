@@ -244,128 +244,142 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
   // ── API Fetchers con Cache-Aside ──────────────────────────────────────────
 
   Future<List<Product>> _fetchProducts() async {
-    final cached = _cache.get(CacheKeys.products);
-    if (cached != null) {
+    List<Product>? parseFromCache(dynamic raw) {
+      if (raw is! List) return null;
       try {
-        final products = (cached as List)
+        return raw
             .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
             .toList();
-        debugPrint('[Inventory] cache HIT products (${products.length})');
-        return products;
       } catch (_) {
-        await _cache.invalidate(CacheKeys.products);
+        return null;
       }
     }
 
-    try {
-      debugPrint('[Inventory] GET $kProducts');
-      final data = await _api.get(kProducts) as dynamic;
-      final list = _extractList(data);
-      final products = list
-          .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
-          .toList();
-      await _cache.put(CacheKeys.products, list);
-      await InventorySqliteMirror.shared.mirrorProducts(products);
-      debugPrint('[Inventory] products from API (${products.length}) → cached');
-      return products;
-    } catch (e) {
-      debugPrint('[Inventory] fetchProducts failed: $e');
-      final stale = _cache.get(CacheKeys.products, allowStale: true);
-      if (stale != null) {
-        try {
-          final products = (stale as List)
-              .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
-              .toList();
-          debugPrint('[Inventory] products from STALE cache (${products.length})');
-          return products;
-        } catch (_) {}
+    if (_connectivity.isOnline) {
+      try {
+        debugPrint('[Inventory] GET $kProducts');
+        final data = await _api.get(kProducts) as dynamic;
+        final list = _extractList(data);
+        final products = list
+            .map((e) => Product.fromBackendJson(e as Map<String, dynamic>))
+            .toList();
+        await _cache.put(CacheKeys.products, list);
+        await InventorySqliteMirror.shared.mirrorProducts(products);
+        debugPrint('[Inventory] products from API (${products.length}) → cached');
+        return products;
+      } catch (e) {
+        debugPrint('[Inventory] fetchProducts API failed: $e');
       }
-      debugPrint('[Inventory] fallback MockData.products');
-      return MockData.products;
     }
+
+    final cached = parseFromCache(_cache.get(CacheKeys.products));
+    if (cached != null) {
+      debugPrint('[Inventory] products from cache (${cached.length})');
+      return cached;
+    }
+
+    final stale = parseFromCache(_cache.get(CacheKeys.products, allowStale: true));
+    if (stale != null) {
+      debugPrint('[Inventory] products from STALE cache (${stale.length})');
+      return stale;
+    }
+
+    debugPrint('[Inventory] fallback MockData.products');
+    return MockData.products;
   }
 
   Future<List<InventoryAlert>> _fetchAlerts() async {
-    final cached = _cache.get(CacheKeys.alerts);
-    if (cached != null) {
+    List<InventoryAlert>? parseFromCache(dynamic raw) {
+      if (raw is! List) return null;
       try {
-        final alerts = await _mergePendingAlertReads(
-          (cached as List)
-              .map((e) =>
-                  InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
-              .toList(),
-        );
-        debugPrint('[Inventory] cache HIT alerts (${alerts.length})');
-        return alerts;
+        return raw
+            .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
+            .toList();
       } catch (_) {
-        await _cache.invalidate(CacheKeys.alerts);
+        return null;
       }
     }
 
-    try {
-      debugPrint('[Inventory] GET $kAlerts');
-      final data = await _api.get(kAlerts) as dynamic;
-      final list = _extractList(data);
-      var alerts = list
-          .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
-          .toList();
-      alerts = await _mergePendingAlertReads(alerts);
-      await _cache.put(CacheKeys.alerts, list);
-      debugPrint('[Inventory] alerts from API (${alerts.length}) → cached');
-      return alerts;
-    } catch (e) {
-      debugPrint('[Inventory] fetchAlerts failed: $e');
-      final stale = _cache.get(CacheKeys.alerts, allowStale: true);
-      if (stale != null) {
-        try {
-          final alerts = (stale as List)
-              .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
-              .toList();
-          debugPrint('[Inventory] alerts from STALE cache (${alerts.length})');
-          return alerts;
-        } catch (_) {}
+    if (_connectivity.isOnline) {
+      try {
+        debugPrint('[Inventory] GET $kAlerts');
+        final data = await _api.get(kAlerts) as dynamic;
+        final list = _extractList(data);
+        var alerts = list
+            .map((e) => InventoryAlert.fromBackendJson(e as Map<String, dynamic>))
+            .toList();
+        alerts = await _mergePendingAlertReads(alerts);
+        await _cache.put(CacheKeys.alerts, list);
+        debugPrint('[Inventory] alerts from API (${alerts.length}) → cached');
+        return alerts;
+      } catch (e) {
+        debugPrint('[Inventory] fetchAlerts API failed: $e');
       }
-      return MockData.alerts;
     }
+
+    final cached = parseFromCache(_cache.get(CacheKeys.alerts));
+    if (cached != null) {
+      final merged = await _mergePendingAlertReads(cached);
+      debugPrint('[Inventory] alerts from cache (${merged.length})');
+      return merged;
+    }
+
+    final stale = parseFromCache(_cache.get(CacheKeys.alerts, allowStale: true));
+    if (stale != null) {
+      final merged = await _mergePendingAlertReads(stale);
+      debugPrint('[Inventory] alerts from STALE cache (${merged.length})');
+      return merged;
+    }
+
+    return MockData.alerts;
   }
 
   Future<DashboardStats?> _fetchDashboard() async {
-    final cached = _cache.get(CacheKeys.dashboard);
-    if (cached != null) {
+    DashboardStats? parseFromCache(dynamic raw) {
+      if (raw is! Map<String, dynamic>) return null;
       try {
-        debugPrint('[Inventory] cache HIT dashboard');
-        return _parseDashboardStats(cached as Map<String, dynamic>);
+        return _parseDashboardStats(raw);
       } catch (_) {
-        await _cache.invalidate(CacheKeys.dashboard);
+        return null;
       }
     }
 
-    try {
-      debugPrint('[Inventory] GET $kAnalyticsDashboard');
-      final data = await _api.get(kAnalyticsDashboard) as Map<String, dynamic>?;
-      if (data == null) return null;
-      await _cache.put(CacheKeys.dashboard, data);
-      final stats = _parseDashboardStats(data);
-      final storeId = _api.storeId;
-      if (storeId != null) {
-        await DashboardSnapshotStore.shared.save(storeId, stats);
+    if (_connectivity.isOnline) {
+      try {
+        debugPrint('[Inventory] GET $kAnalyticsDashboard');
+        final data = await _api.get(kAnalyticsDashboard) as Map<String, dynamic>?;
+        if (data == null) return null;
+        await _cache.put(CacheKeys.dashboard, data);
+        final stats = _parseDashboardStats(data);
+        final storeId = _api.storeId;
+        if (storeId != null) {
+          await DashboardSnapshotStore.shared.save(storeId, stats);
+        }
+        debugPrint('[Inventory] dashboard from API → cached');
+        return stats;
+      } catch (e) {
+        debugPrint('[Inventory] fetchDashboard API failed: $e');
       }
-      debugPrint('[Inventory] dashboard from API → cached');
-      return stats;
-    } catch (e) {
-      debugPrint('[Inventory] fetchDashboard failed: $e');
-      final stale = _cache.get(CacheKeys.dashboard, allowStale: true);
-      if (stale != null) {
-        try {
-          return _parseDashboardStats(stale as Map<String, dynamic>);
-        } catch (_) {}
-      }
-      final storeId = _api.storeId;
-      if (storeId != null) {
-        return DashboardSnapshotStore.shared.load(storeId);
-      }
-      return null;
     }
+
+    final cached = parseFromCache(_cache.get(CacheKeys.dashboard));
+    if (cached != null) {
+      debugPrint('[Inventory] dashboard from cache');
+      return cached;
+    }
+
+    final stale = parseFromCache(_cache.get(CacheKeys.dashboard, allowStale: true));
+    if (stale != null) {
+      debugPrint('[Inventory] dashboard from STALE cache');
+      return stale;
+    }
+
+    final storeId = _api.storeId;
+    if (storeId != null) {
+      return DashboardSnapshotStore.shared.load(storeId);
+    }
+
+    return null;
   }
 
   Future<List<InventoryAlert>> _mergePendingAlertReads(

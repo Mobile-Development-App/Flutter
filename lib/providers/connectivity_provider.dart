@@ -72,7 +72,7 @@ final connectivityProvider = StreamProvider.autoDispose<bool>((ref) async* {
 ///
 /// CANCELACIÓN: ref.onDispose cancela la StreamSubscription explícita,
 /// evitando leaks aunque el widget se desmonte inesperadamente.
-final offlineQueueWatcherProvider = Provider.autoDispose<void>((ref) {
+final offlineQueueWatcherProvider = Provider<void>((ref) {
   StreamSubscription<bool>? sub;
 
   sub = ConnectivityService.shared.onConnectivityChanged.listen(

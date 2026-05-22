@@ -121,6 +121,7 @@
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ignore: unused_element
 void _documentationOnly() {
   // Este archivo es solo documentación. No contiene código ejecutable.
   // Consulta connectivity_provider.dart, inventory_provider.dart,

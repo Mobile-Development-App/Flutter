@@ -462,7 +462,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
       debugPrint('[Inventory] addProduct — OFFLINE, optimistic + encolando');
       await _enqueueOp(OfflineOpType.addProduct, productToSend.toBackendJson());
       final s         = state.value!;
-      final updated   = [...s.products, product];
+      final updated   = [...s.products, productToSend];
       final newAlerts = _generateAlerts(product, s.alerts);
       _update((_) => s.copyWith(
             products: updated, alerts: newAlerts,
@@ -474,9 +474,13 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
             as Map<String, dynamic>;
         final created = Product.fromBackendJson(
             body['product'] as Map<String, dynamic>? ?? body);
+        final saved = created.copyWith(
+          expirationDate:
+              productToSend.expirationDate ?? created.expirationDate,
+        );
         final s         = state.value!;
-        final updated   = [...s.products, created];
-        final newAlerts = _generateAlerts(created, s.alerts);
+        final updated   = [...s.products, saved];
+        final newAlerts = _generateAlerts(saved, s.alerts);
         await _cache.invalidate(CacheKeys.products);
         _update((_) => s.copyWith(
               products: updated, alerts: newAlerts,
@@ -486,7 +490,7 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
         debugPrint('[Inventory] addProduct API failed, encolando: $e');
         await _enqueueOp(OfflineOpType.addProduct, productToSend.toBackendJson());
         final s       = state.value!;
-        final updated = [...s.products, product];
+        final updated = [...s.products, productToSend];
         _update((_) => s.copyWith(
             products: updated,
             dashboardStats: _buildStats(updated, s.orders, s.alerts),
@@ -494,10 +498,10 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
       }
     }
 
-    _logAudit('Producto Agregado', 'Product', product.id, product.name,
-        'SKU: ${product.sku}');
+    _logAudit('Producto Agregado', 'Product', productToSend.id, productToSend.name,
+        'SKU: ${productToSend.sku}');
     if (_notificationsEnabled) {
-      await _notif.showProductAdded(product.name);
+      await _notif.showProductAdded(productToSend.name);
     }
   }
 
@@ -510,7 +514,6 @@ class InventoryNotifier extends AsyncNotifier<InventoryState> {
         ? product.copyWith(storeId: _api.storeId)
         : product;
 
-    // Optimistic update inmediato en estado local
     final s   = state.value!;
     final idx = s.products.indexWhere((p) => p.id == product.id);
     if (idx != -1) {

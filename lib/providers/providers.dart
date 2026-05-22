@@ -9,6 +9,7 @@ export 'usage_analytics_provider.dart';
 export 'business_questions_provider.dart'; // Sprint 4 — BQ3 · BQ4 · BQ6
 export 'inventory_health_provider.dart';
 export 'stock_count_provider.dart';
+export 'location_walk_provider.dart';
 export 'pinned_products_provider.dart';
 export 'search_history_provider.dart'; // Sprint 5 — Search History Cache
 export 'connectivity_provider.dart'; // Sprint 4 — Connectivity

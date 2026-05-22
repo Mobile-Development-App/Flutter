@@ -310,7 +310,6 @@ final eventualConnectivitySummaryProvider =
       await ref.watch(eventualConnectivityStatusProvider.future);
   final connectivity = ConnectivityService.shared;
   final offline = OfflineQueueService.shared;
-  final cache = CacheService.shared;
 
   final totalFunctionalities = statuses.length;
   final withOfflineRead = statuses.where((s) => s.supportsOfflineRead).length;

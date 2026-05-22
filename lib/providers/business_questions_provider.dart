@@ -6,8 +6,8 @@ import '../core/constants/api_constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/bq_cache_service.dart';
+import '../services/connectivity_service.dart';
 import '../services/usage_tracking_service.dart';
-import 'connectivity_provider.dart'; // ← connectivityProvider vive aquí (Sprint 4)
 import 'inventory_provider.dart';
 
 class BQ3ProductInsight {
@@ -120,7 +120,7 @@ class BQ3Notifier extends AsyncNotifier<BQ3Dashboard> {
   }
 
   Future<BQ3Dashboard> _load() async {
-    final online = ref.read(connectivityProvider).value ?? true;
+    final online = ConnectivityService.shared.isOnline;
     final cache = BQCacheService.shared;
     if (!online) {
       final cached = await cache.read('bq3_dashboard');
@@ -140,86 +140,107 @@ class BQ3Notifier extends AsyncNotifier<BQ3Dashboard> {
       );
     }
 
-    final alerts = inv.alerts
-        .where((a) => a.productId != null &&
-            (a.type == AlertType.lowStock || a.type == AlertType.outOfStock))
-        .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    try {
+      final alerts = inv.alerts
+          .where((a) => a.productId != null &&
+              (a.type == AlertType.lowStock || a.type == AlertType.outOfStock))
+          .toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
-    final productIds = alerts.map((e) => e.productId!).toSet().toList();
-    final movementLists = await Future.wait(productIds.map(_loadMovementsForProduct));
-    final movementsByProduct = <String, List<InventoryMovement>>{
-      for (var i = 0; i < productIds.length; i++) productIds[i]: movementLists[i],
-    };
+      final productIds = alerts.map((e) => e.productId!).toSet().toList();
+      final movementLists = await Future.wait(productIds.map(_loadMovementsForProduct));
+      final movementsByProduct = <String, List<InventoryMovement>>{
+        for (var i = 0; i < productIds.length; i++) productIds[i]: movementLists[i],
+      };
 
-    final productsById = {for (final p in inv.products) p.id: p};
-    final perProduct = <String, List<int>>{};
-    final pendingByProduct = <String, bool>{};
-    final lastAlertByProduct = <String, DateTime?>{};
-    final lastRestockByProduct = <String, DateTime?>{};
+      final productsById = {for (final p in inv.products) p.id: p};
+      final perProduct = <String, List<int>>{};
+      final pendingByProduct = <String, bool>{};
+      final lastAlertByProduct = <String, DateTime?>{};
+      final lastRestockByProduct = <String, DateTime?>{};
 
-    for (final alert in alerts) {
-      final pid = alert.productId!;
-      lastAlertByProduct[pid] = alert.createdAt;
-      final restocks = (movementsByProduct[pid] ?? const [])
-          .where((m) => m.type == InventoryMovementType.restock && !m.createdAt.isBefore(alert.createdAt))
-          .toList();
-      if (restocks.isEmpty) {
-        pendingByProduct[pid] = true;
-        continue;
+      for (final alert in alerts) {
+        final pid = alert.productId!;
+        lastAlertByProduct[pid] = alert.createdAt;
+        final restocks = (movementsByProduct[pid] ?? const [])
+            .where((m) => m.type == InventoryMovementType.restock && !m.createdAt.isBefore(alert.createdAt))
+            .toList();
+        if (restocks.isEmpty) {
+          pendingByProduct[pid] = true;
+          continue;
+        }
+        final nextRestock = restocks.first;
+        final delta = nextRestock.createdAt.difference(alert.createdAt).inDays;
+        if (delta < 0) continue;
+        perProduct.putIfAbsent(pid, () => []).add(delta);
+        lastRestockByProduct[pid] = nextRestock.createdAt;
+        pendingByProduct.putIfAbsent(pid, () => false);
       }
-      final nextRestock = restocks.first;
-      final delta = nextRestock.createdAt.difference(alert.createdAt).inDays;
-      if (delta < 0) continue;
-      perProduct.putIfAbsent(pid, () => []).add(delta);
-      lastRestockByProduct[pid] = nextRestock.createdAt;
-      pendingByProduct.putIfAbsent(pid, () => false);
+
+      final items = <BQ3ProductInsight>[];
+      for (final pid in {...productIds, ...perProduct.keys}) {
+        final product = productsById[pid];
+        final values = perProduct[pid] ?? const <int>[];
+        final avg = values.isEmpty ? 0 : values.reduce((a, b) => a + b) / values.length;
+        items.add(BQ3ProductInsight(
+          productId: pid,
+          productName: product?.name ?? alerts.firstWhere((a) => a.productId == pid, orElse: () => InventoryAlert(id: '', title: '', message: '', type: AlertType.lowStock, priority: AlertPriority.low, isRead: false, createdAt: DateTime.now())).productName ?? 'Producto',
+          cycles: values.length,
+          averageDays: avg.toDouble(),
+          minDays: values.isEmpty ? 0 : values.reduce(math.min),
+          maxDays: values.isEmpty ? 0 : values.reduce(math.max),
+          lastAlertAt: lastAlertByProduct[pid],
+          lastRestockAt: lastRestockByProduct[pid],
+          hasPendingAlert: pendingByProduct[pid] ?? false,
+          currentStock: product?.quantity ?? 0,
+          minStock: product?.minStock ?? 0,
+        ));
+      }
+      items.sort((a, b) => b.averageDays.compareTo(a.averageDays));
+
+      final allCycles = perProduct.values.expand((e) => e).toList();
+      final dashboard = BQ3Dashboard(
+        averageDays: allCycles.isEmpty ? 0 : allCycles.reduce((a, b) => a + b) / allCycles.length,
+        completedCycles: allCycles.length,
+        pendingAlerts: pendingByProduct.values.where((e) => e).length,
+        longestCycleDays: allCycles.isEmpty ? 0 : allCycles.reduce(math.max),
+        shortestCycleDays: allCycles.isEmpty ? 0 : allCycles.reduce(math.min),
+        products: items,
+      );
+
+      await cache.save('bq3_dashboard', _toCacheBQ3(dashboard));
+      return dashboard;
+    } catch (_) {
+      final cached = await cache.read('bq3_dashboard');
+      final parsed = _fromCache(cached);
+      if (parsed != null) return parsed;
+      return const BQ3Dashboard(
+        averageDays: 0,
+        completedCycles: 0,
+        pendingAlerts: 0,
+        longestCycleDays: 0,
+        shortestCycleDays: 0,
+        products: [],
+      );
     }
-
-    final items = <BQ3ProductInsight>[];
-    for (final pid in {...productIds, ...perProduct.keys}) {
-      final product = productsById[pid];
-      final values = perProduct[pid] ?? const <int>[];
-      final avg = values.isEmpty ? 0 : values.reduce((a, b) => a + b) / values.length;
-      items.add(BQ3ProductInsight(
-        productId: pid,
-        productName: product?.name ?? alerts.firstWhere((a) => a.productId == pid, orElse: () => InventoryAlert(id: '', title: '', message: '', type: AlertType.lowStock, priority: AlertPriority.low, isRead: false, createdAt: DateTime.now())).productName ?? 'Producto',
-        cycles: values.length,
-        averageDays: avg.toDouble(),
-        minDays: values.isEmpty ? 0 : values.reduce(math.min),
-        maxDays: values.isEmpty ? 0 : values.reduce(math.max),
-        lastAlertAt: lastAlertByProduct[pid],
-        lastRestockAt: lastRestockByProduct[pid],
-        hasPendingAlert: pendingByProduct[pid] ?? false,
-        currentStock: product?.quantity ?? 0,
-        minStock: product?.minStock ?? 0,
-      ));
-    }
-    items.sort((a, b) => b.averageDays.compareTo(a.averageDays));
-
-    final allCycles = perProduct.values.expand((e) => e).toList();
-    final dashboard = BQ3Dashboard(
-      averageDays: allCycles.isEmpty ? 0 : allCycles.reduce((a, b) => a + b) / allCycles.length,
-      completedCycles: allCycles.length,
-      pendingAlerts: pendingByProduct.values.where((e) => e).length,
-      longestCycleDays: allCycles.isEmpty ? 0 : allCycles.reduce(math.max),
-      shortestCycleDays: allCycles.isEmpty ? 0 : allCycles.reduce(math.min),
-      products: items,
-    );
-
-    await cache.save('bq3_dashboard', _toCacheBQ3(dashboard));
-    return dashboard;
   }
 
   Future<List<InventoryMovement>> _loadMovementsForProduct(String productId) async {
-    final data = await ApiService.shared.get(kInventoryMovements, query: {'productId': productId});
-    final list = _extractList(data);
-    return list
-        .whereType<Map>()
-        .map((e) => InventoryMovement.fromBackendJson(e.cast<String, dynamic>()))
-        .where((m) => m.productId == productId)
-        .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    if (!ConnectivityService.shared.isOnline) {
+      return const <InventoryMovement>[];
+    }
+    try {
+      final data = await ApiService.shared.get(kInventoryMovements, query: {'productId': productId});
+      final list = _extractList(data);
+      return list
+          .whereType<Map>()
+          .map((e) => InventoryMovement.fromBackendJson(e.cast<String, dynamic>()))
+          .where((m) => m.productId == productId)
+          .toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    } catch (_) {
+      return const <InventoryMovement>[];
+    }
   }
 
   List<dynamic> _extractList(dynamic data) {
@@ -299,7 +320,7 @@ class BQ4Notifier extends AsyncNotifier<BQ4Dashboard> {
 
   Future<BQ4Dashboard> _load() async {
     await UsageTrackingService.shared.init();
-    final online = ref.read(connectivityProvider).value ?? true;
+    final online = ConnectivityService.shared.isOnline;
     final cache = BQCacheService.shared;
     if (!online) {
       final cached = await cache.read('bq4_dashboard');
@@ -397,7 +418,7 @@ class BQ6Notifier extends AsyncNotifier<BQ6Dashboard> {
 
   Future<BQ6Dashboard> _load() async {
     await UsageTrackingService.shared.init();
-    final online = ref.read(connectivityProvider).value ?? true;
+    final online = ConnectivityService.shared.isOnline;
     final cache = BQCacheService.shared;
     if (!online) {
       final cached = await cache.read('bq6_dashboard');

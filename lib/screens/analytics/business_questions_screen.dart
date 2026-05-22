@@ -5,7 +5,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../models/product.dart';
-import '../../providers/connectivity_provider.dart';
 import '../../providers/providers.dart';
 
 class BusinessQuestionsScreen extends StatelessWidget {

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/cache_service.dart';
+import '../services/connectivity_service.dart';
 import '../services/analytics_worker_service.dart';
 import '../services/pipeline_logger.dart';
 import '../services/data_processing_service.dart';
@@ -232,6 +233,7 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
     }
 
     final cacheKey = 'sales_${storeId}_${range.value}';
+    final isOnline = ConnectivityService.shared.isOnline;
     List<SalesDataPoint>? readCached({required bool allowStale}) {
       final raw = _cache.get(cacheKey, allowStale: allowStale);
       if (raw is! List) return null;
@@ -245,11 +247,18 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       }
     }
 
-    // Cache (válido) primero: reduce llamadas a Firestore al navegar/rebuilds.
-    final cached = readCached(allowStale: false);
-    if (cached != null && cached.isNotEmpty) {
-      debugPrint('[Analytics] ✅ Sales cache HIT: ${cached.length} pts ($cacheKey)');
-      return cached;
+    if (!isOnline) {
+      final cached = readCached(allowStale: false);
+      if (cached != null) {
+        debugPrint('[Analytics] Sales cache fallback (offline): ${cached.length} pts');
+        return cached;
+      }
+      final stale = readCached(allowStale: true);
+      if (stale != null) {
+        debugPrint('[Analytics] Sales STALE cache fallback (offline): ${stale.length} pts');
+        return stale;
+      }
+      return [];
     }
 
     debugPrint('[Analytics] Consultando Firestore '
@@ -281,8 +290,13 @@ class AnalyticsNotifier extends AsyncNotifier<AnalyticsState> {
       return points;
     } catch (e, st) {
       debugPrint('[Analytics] ❌ _fetchSalesFromFirestore: $e\n$st');
+      final cached = readCached(allowStale: false);
+      if (cached != null) {
+        debugPrint('[Analytics] Sales cache fallback: ${cached.length} pts');
+        return cached;
+      }
       final stale = readCached(allowStale: true);
-      if (stale != null && stale.isNotEmpty) {
+      if (stale != null) {
         debugPrint('[Analytics] ⚠️  Sales cache STALE fallback: ${stale.length} pts');
         return stale;
       }

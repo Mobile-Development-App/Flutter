@@ -6,7 +6,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
-
 class BusinessQuestionsScreen extends StatelessWidget {
   const BusinessQuestionsScreen({super.key});
 
@@ -46,7 +45,11 @@ class _BQCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  const _BQCard({required this.title, required this.subtitle, required this.onTap});
+  const _BQCard({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +73,13 @@ class _BQCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
-                child: Text(title, style: AppTypography.caption.copyWith(color: AppColors.deepSpaceBlue, fontWeight: FontWeight.w700)),
+                child: Text(
+                  title,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.deepSpaceBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),

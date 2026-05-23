@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../../services/stability_telemetry_service.dart';
 import '../../services/usage_tracking_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,13 +39,14 @@ mixin ScreenTrackerMixin<T extends StatefulWidget> on State<T> {
   }
 
   void _startTracking() {
+    StabilityTelemetryService.shared.setActiveScreen(trackedScreenName);
     UsageTrackingService.shared.init().then((_) {
       UsageTrackingService.shared.trackScreenEnter(trackedScreenName);
     });
   }
 
   void _stopTracking() {
-    // Fire-and-forget: dispose cannot be async, so we use unawaited
     UsageTrackingService.shared.trackScreenExit(trackedScreenName);
+    StabilityTelemetryService.shared.setActiveScreen(null);
   }
 }

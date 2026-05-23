@@ -7,6 +7,7 @@ import '../../core/utils/extensions.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
 import '../../storage/open_food_facts_lookup.dart';
+import '../../services/quick_scan_history_service.dart';
 import '../../storage/persistence/scan_session_file_store.dart';
 import '../products/add_product_screen.dart';
 import '../products/product_detail_screen.dart';
@@ -21,13 +22,18 @@ class OpenFoodFactsService {
       OpenFoodFactsLookup.lookup(barcode);
 }
 
-/// Registra el escaneo en archivo local (lib/storage).
+/// Registra el escaneo en archivo local (lib/storage) + últimos 10 rápidos.
 Future<void> recordScanSession({
   required String barcode,
   required bool foundInInventory,
   String? productName,
   String? brand,
+  String? productId,
 }) async {
+  final label = productName?.trim().isNotEmpty == true
+      ? productName!.trim()
+      : (brand?.trim().isNotEmpty == true ? brand!.trim() : 'Código $barcode');
+
   await ScanSessionFileStore.shared.append(
     ScanSessionEntry(
       barcode: barcode,
@@ -36,6 +42,13 @@ Future<void> recordScanSession({
       scannedAt: DateTime.now(),
       foundInInventory: foundInInventory,
     ),
+  );
+
+  await QuickScanHistoryService.shared.record(
+    barcode: barcode,
+    productId: productId,
+    displayName: label,
+    foundInInventory: foundInInventory,
   );
 }
 

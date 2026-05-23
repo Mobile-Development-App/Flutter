@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../core/utils/screen_tracker_mixin.dart';
 import '../../providers/providers.dart';
 import 'scan_screen.dart';
 
@@ -20,7 +21,11 @@ class ScanScreenWeb extends ConsumerStatefulWidget {
   ConsumerState<ScanScreenWeb> createState() => _ScanScreenWebState();
 }
 
-class _ScanScreenWebState extends ConsumerState<ScanScreenWeb> {
+class _ScanScreenWebState extends ConsumerState<ScanScreenWeb>
+    with ScreenTrackerMixin {
+  @override
+  String get trackedScreenName => 'scan';
+
   final _barcodeCtrl = TextEditingController();
   final _focusNode = FocusNode();
   ScanState _state = ScanState.ready;
@@ -63,7 +68,9 @@ class _ScanScreenWebState extends ConsumerState<ScanScreenWeb> {
         barcode: barcode,
         foundInInventory: true,
         productName: existing.name,
+        productId: existing.id,
       );
+      ref.invalidate(quickScanHistoryProvider);
       setState(() {
         _result = ScanResult(
           barcode: barcode,
@@ -83,6 +90,7 @@ class _ScanScreenWebState extends ConsumerState<ScanScreenWeb> {
       productName: foodData?['name'] as String?,
       brand: foodData?['brand'] as String?,
     );
+    ref.invalidate(quickScanHistoryProvider);
 
     setState(() {
       _result = ScanResult(

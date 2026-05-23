@@ -12,6 +12,8 @@ export 'offline_queue_service.dart';
 export 'cache_service.dart';
 export 'bq_cache_service.dart'; // BQ offline cache (SharedPreferences TTL)
 export 'analytics_worker_service.dart';
+export 'quick_scan_history_service.dart';
+export 'stability_telemetry_service.dart';
 export 'local_store_service.dart';
 export 'motion_vibration_service.dart';
 // Sprint 4 — New Feature: Inventory Health Score (4 concurrent Isolates)

@@ -95,8 +95,17 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.bug_report_outlined),
+            tooltip: 'Uso y Analítica · BQ2',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const UsageInsightsScreen(initialTabIndex: 1),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.insights_rounded),
-            tooltip: 'Insights Sprint 3',
+            tooltip: 'Uso y analítica (todas las BQ)',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const UsageInsightsScreen(),
@@ -157,6 +166,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                    _insightsEntryBanner(context, isDark),
+                    const SizedBox(height: 14),
                     _rangeSelector(isDark),
                     const SizedBox(height: 18),
 
@@ -446,6 +457,68 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _insightsEntryBanner(BuildContext context, bool isDark) {
+    return Material(
+      color: isDark ? AppColors.darkSurface : AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const UsageInsightsScreen(initialTabIndex: 1),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.bug_report_rounded,
+                  color: AppColors.error,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Uso & Analítica · mi BQ2',
+                      style: AppTypography.callout.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pantallas con más crashes al actualizar inventario. '
+                      'Toca aquí → pestaña «BQ2 Crashes».',
+                      style: AppTypography.caption.copyWith(
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
       ),
     );
   }

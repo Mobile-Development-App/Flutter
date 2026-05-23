@@ -12,5 +12,7 @@ export 'stock_count_provider.dart';
 export 'location_walk_provider.dart';
 export 'pinned_products_provider.dart';
 export 'search_history_provider.dart'; // Sprint 5 — Search History Cache
+export 'quick_scan_history_provider.dart'; // Sprint 4 — Últimos escaneos
+export 'bq2_provider.dart'; // Sprint 4 — BQ2 crashes en inventario
 export 'connectivity_provider.dart'; // Sprint 4 — Connectivity
 export 'eventual_connectivity_provider.dart'; // Sprint 5 — Eventual Connectivity Status

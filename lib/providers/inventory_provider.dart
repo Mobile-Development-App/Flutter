@@ -28,7 +28,8 @@ enum StockFilter {
   all('Todos'),
   inStock('En Stock'),
   lowStock('Stock Bajo'),
-  outOfStock('Agotado');
+  outOfStock('Agotado'),
+  recentScans('Últimos escaneos');
 
   const StockFilter(this.label);
   final String label;
@@ -122,6 +123,7 @@ class InventoryState {
         result = result.where((p) => p.stockStatus == StockStatus.lowStock).toList();
       case StockFilter.outOfStock:
         result = result.where((p) => p.stockStatus == StockStatus.outOfStock).toList();
+      case StockFilter.recentScans:
       case StockFilter.all:
         break;
     }
@@ -136,6 +138,7 @@ class InventoryState {
         StockFilter.inStock:    products.where((p) => p.stockStatus == StockStatus.inStock).length,
         StockFilter.lowStock:   products.where((p) => p.stockStatus == StockStatus.lowStock).length,
         StockFilter.outOfStock: products.where((p) => p.stockStatus == StockStatus.outOfStock).length,
+        StockFilter.recentScans: 0,
       };
 
   int get unreadAlertCount => alerts.where((a) => !a.isRead).length;

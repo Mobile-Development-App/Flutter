@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
@@ -19,7 +18,7 @@ class MotionVibrationService {
     if (!Platform.isAndroid && !Platform.isIOS) return;
     if (_sub != null) return;
 
-    _sub = accelerometerEventStream().listen((e) {
+    _sub = accelerometerEvents.listen((e) {
       final m = (e.x * e.x + e.y * e.y + e.z * e.z);
       _lastMagnitudeSq = m;
       _lastSampleAt = DateTime.now();

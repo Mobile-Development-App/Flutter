@@ -34,3 +34,7 @@ const String kSalesSummary = '/sales/summary';
 
 // Restock
 const String kRestockSuggestions = '/restock/suggestions';
+
+// Feature requests (BQ10)
+const String kFeatureRequests = '/feature-requests';
+const String kFeatureRequestsAggregate = '/feature-requests/aggregate';

@@ -7,6 +7,7 @@ import 'cache/restock_suggestions_cache.dart';
 import 'cache/stock_count_summary_cache.dart';
 import 'persistence/alerts_read_preferences_store.dart';
 import 'cache/location_walk_snapshot_cache.dart';
+import 'persistence/feature_request_local_store.dart';
 import 'persistence/location_walk_local_store.dart';
 import 'persistence/stock_count_local_store.dart';
 import 'persistence/scan_session_file_store.dart';
@@ -23,6 +24,7 @@ class StorageInitializer {
       RestockSuggestionsCache.shared.init(),
       StockCountSummaryCache.shared.init(),
       LocationWalkSnapshotCache.shared.init(),
+      FeatureRequestLocalStore.shared.init(),
       LocationWalkLocalStore.shared.init(),
       StockCountLocalStore.shared.init(),
       DashboardSnapshotStore.shared.init(),

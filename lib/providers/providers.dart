@@ -6,7 +6,7 @@ export 'settings_provider.dart';
 export 'context_provider.dart';
 export 'restock_ai_suggestions_provider.dart';
 export 'usage_analytics_provider.dart';
-export 'business_questions_provider.dart'; // Sprint 4 — BQ3 · BQ4 · BQ6
+export 'business_questions_provider.dart';
 export 'inventory_health_provider.dart';
 export 'stock_count_provider.dart';
 export 'location_walk_provider.dart';

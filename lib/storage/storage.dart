@@ -13,5 +13,6 @@ export 'persistence/alerts_read_preferences_store.dart';
 export 'persistence/inventory_sqlite_mirror.dart';
 export 'persistence/scan_session_file_store.dart';
 export 'persistence/stock_count_local_store.dart';
+export 'persistence/feature_request_local_store.dart';
 export 'persistence/location_walk_local_store.dart';
 export 'storage_initializer.dart';

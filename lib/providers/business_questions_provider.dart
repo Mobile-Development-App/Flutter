@@ -3,11 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
+import '../services/api_service.dart';
 import '../services/bq_cache_service.dart';
 import '../services/connectivity_service.dart';
+import '../services/feature_request_service.dart';
 import '../services/usage_tracking_service.dart';
 import '../storage/inventory_movements_fetcher.dart';
 import 'inventory_provider.dart';
+import 'store_provider.dart';
 
 class BQ3ProductInsight {
   final String productId;
@@ -454,3 +457,53 @@ class BQ6Notifier extends AsyncNotifier<BQ6Dashboard> {
 }
 
 final bq6Provider = AsyncNotifierProvider<BQ6Notifier, BQ6Dashboard>(BQ6Notifier.new);
+
+class BQ10Notifier extends AsyncNotifier<BQ10Dashboard> {
+  @override
+  Future<BQ10Dashboard> build() async => _load();
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_load);
+  }
+
+  Future<void> submitRequest(String title) async {
+    final accountId = ApiService.shared.storeId ?? 'local-account';
+    final accountLabel =
+        ref.read(storeProvider).value?.activeStore?.name ?? 'Mi tienda';
+    await FeatureRequestService.shared.submit(
+      title: title,
+      accountId: accountId,
+      accountLabel: accountLabel,
+    );
+    await refresh();
+  }
+
+  Future<BQ10Dashboard> _load() async {
+    final online = ConnectivityService.shared.isOnline;
+    final cache = BQCacheService.shared;
+    const empty = BQ10Dashboard(
+      totalSubmissions: 0,
+      distinctAccounts: 0,
+      repeatedThemes: 0,
+      topRequests: [],
+    );
+
+    if (!online) {
+      final cached = await cache.read('bq10_dashboard');
+      return FeatureRequestService.shared.dashboardFromCache(cached) ??
+          await FeatureRequestService.shared.loadDashboard(preferRemote: false);
+    }
+
+    try {
+      return await FeatureRequestService.shared
+          .loadDashboard(preferRemote: true);
+    } catch (_) {
+      final cached = await cache.read('bq10_dashboard');
+      return FeatureRequestService.shared.dashboardFromCache(cached) ?? empty;
+    }
+  }
+}
+
+final bq10Provider =
+    AsyncNotifierProvider<BQ10Notifier, BQ10Dashboard>(BQ10Notifier.new);

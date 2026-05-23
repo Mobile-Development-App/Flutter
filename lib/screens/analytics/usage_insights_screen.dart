@@ -5,12 +5,12 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
-import '../../providers/usage_analytics_provider.dart';
+import '../../providers/providers.dart';
 import '../../services/usage_tracking_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UsageInsightsScreen
-// Sprint 3 Business Questions: BQ1 · BQ5 · BQ7 · BQ8 · BQ9
+// Sprint 3 Business Questions: BQ1 · BQ5 · BQ7 · BQ8 · BQ9 · BQ10
 // ─────────────────────────────────────────────────────────────────────────────
 
 class UsageInsightsScreen extends ConsumerStatefulWidget {
@@ -28,7 +28,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 5, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
     UsageTrackingService.shared.trackFeatureUsed('usageInsights');
   }
 
@@ -44,6 +44,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
     ref.read(bq7Provider.notifier).refresh();
     ref.read(bq8Provider.notifier).refresh();
     ref.read(bq9Provider.notifier).refresh();
+    ref.read(bq10Provider.notifier).refresh();
   }
 
   @override
@@ -60,7 +61,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
             Text('Uso & Analítica',
                 style: AppTypography.headline
                     .copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
-            Text('Sprint 3 — BQ1 · BQ5 · BQ7 · BQ8 · BQ9',
+            Text('BQ1 · BQ5 · BQ7 · BQ8 · BQ9 · BQ10',
                 style: AppTypography.caption2
                     .copyWith(color: Colors.white54)),
           ],
@@ -90,6 +91,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
             Tab(text: 'Escaneo vs Manual'),
             Tab(text: 'Funciones'),
             Tab(text: 'Workflow'),
+            Tab(text: 'Solicitudes'),
           ],
         ),
       ),
@@ -101,6 +103,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
           _BQ7Tab(),
           _BQ8Tab(),
           _BQ9Tab(),
+          _BQ10Tab(),
         ],
       ),
     );
@@ -1651,6 +1654,261 @@ class _BQ9TabState extends ConsumerState<_BQ9Tab> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _BQ10Tab extends ConsumerStatefulWidget {
+  const _BQ10Tab();
+
+  @override
+  ConsumerState<_BQ10Tab> createState() => _BQ10TabState();
+}
+
+class _BQ10TabState extends ConsumerState<_BQ10Tab> {
+  final _requestCtrl = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _requestCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _requestCtrl.text.trim();
+    if (text.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Escribe una solicitud de al menos 4 caracteres'),
+        ),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await ref.read(bq10Provider.notifier).submitRequest(text);
+      _requestCtrl.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitud registrada para este mes')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  String _fmtDate(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final bq10 = ref.watch(bq10Provider);
+    final isDark = context.isDark;
+    final online = ref.watch(connectivityProvider).value ?? true;
+
+    return _TabScaffold(
+      bqTag: 'BQ10 · SPRINT 4',
+      tagColor: const Color(0xFF14B8A6),
+      title: 'Solicitudes de funciones repetidas entre cuentas',
+      description:
+          '¿Qué ideas de nuevas funciones enviaron los usuarios en el último mes '
+          'y cuáles se repiten en varias cuentas?',
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _InsightBanner(
+            icon: online ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+            color: online ? AppColors.success : AppColors.warning,
+            text: online
+                ? 'Conectado: datos locales y caché actualizados.'
+                : 'Sin conexión: mostrando el último resultado guardado.',
+          ),
+          const SizedBox(height: 12),
+          _SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SectionHeader(
+                  label: 'Registrar solicitud',
+                  color: Color(0xFF14B8A6),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _requestCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    hintText: 'Ej: Exportar inventario a Excel',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: _submitting ? null : _submit,
+                  icon: _submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded),
+                  label: const Text('Enviar solicitud'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          bq10.when(
+            loading: () => const _SectionCard(child: _LoadingState()),
+            error: (e, _) => _InsightBanner(
+              text: 'Error al cargar: $e',
+              color: AppColors.error,
+              icon: Icons.error_outline_rounded,
+            ),
+            data: (dashboard) {
+              if (dashboard.topRequests.isEmpty) {
+                return _SectionCard(
+                  child: _EmptyState(
+                    icon: Icons.lightbulb_outline_rounded,
+                    message:
+                        'Aún no hay temas repetidos en 2 o más cuentas.\n'
+                        'Envía solicitudes o espera más datos del mes.',
+                  ),
+                );
+              }
+
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MetricTile(
+                          label: 'Solicitudes',
+                          value: '${dashboard.totalSubmissions}',
+                          icon: Icons.inbox_rounded,
+                          color: const Color(0xFF14B8A6),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _MetricTile(
+                          label: 'Cuentas',
+                          value: '${dashboard.distinctAccounts}',
+                          icon: Icons.storefront_rounded,
+                          color: AppColors.freshSky,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _MetricTile(
+                    label: 'Temas repetidos (≥2 cuentas)',
+                    value: '${dashboard.repeatedThemes}',
+                    icon: Icons.repeat_rounded,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(height: 12),
+                  _InsightBanner(
+                    icon: Icons.insights_rounded,
+                    color: const Color(0xFF14B8A6),
+                    text:
+                        'Ordenado por cuántas cuentas distintas pidieron la misma función.',
+                  ),
+                  const SizedBox(height: 12),
+                  _SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _SectionHeader(
+                          label: 'Ranking últimos 30 días',
+                          color: Color(0xFF14B8A6),
+                        ),
+                        const SizedBox(height: 14),
+                        ...dashboard.topRequests.asMap().entries.map((entry) {
+                          final rank = entry.key + 1;
+                          final item = entry.value;
+                          final maxAccounts = dashboard.topRequests.first.accountCount;
+                          final ratio = maxAccounts == 0
+                              ? 0.0
+                              : item.accountCount / maxAccounts;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      '#$rank',
+                                      style: AppTypography.caption.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF14B8A6),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        item.displayTitle,
+                                        style: AppTypography.caption.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? AppColors.darkTextPrimary
+                                              : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '${item.accountCount} cuentas',
+                                      style: AppTypography.caption2.copyWith(
+                                        color: const Color(0xFF14B8A6),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(3),
+                                  child: LinearProgressIndicator(
+                                    value: ratio.clamp(0.0, 1.0),
+                                    minHeight: 5,
+                                    backgroundColor: isDark
+                                        ? AppColors.darkSurfaceSecondary
+                                        : AppColors.surfaceSecondary,
+                                    valueColor: const AlwaysStoppedAnimation(
+                                      Color(0xFF14B8A6),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${item.submissionCount} envíos · '
+                                  '${item.accountLabels.join(', ')} · '
+                                  'Último: ${_fmtDate(item.lastSubmittedAt)}',
+                                  style: AppTypography.caption2.copyWith(
+                                    color: isDark
+                                        ? AppColors.darkTextTertiary
+                                        : AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }

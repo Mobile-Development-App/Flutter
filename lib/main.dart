@@ -16,6 +16,8 @@ import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/notification_service.dart';
 import 'services/offline_queue_service.dart';
+import 'services/quick_scan_history_service.dart';
+import 'services/stability_telemetry_service.dart';
 import 'services/usage_tracking_service.dart';
 import 'services/analytics_worker_service.dart';
 import 'services/local_store_service.dart';
@@ -35,6 +37,9 @@ void main() async {
 
     // Estrategia de almacenamiento local (Hive) — Sprint 3.
     await UsageTrackingService.shared.init();
+    await QuickScanHistoryService.shared.init();
+    await StabilityTelemetryService.shared.init();
+    StabilityTelemetryService.shared.installGlobalHandlers();
     await LocalStoreService.shared.init();
     await SearchHistoryCacheService.shared.init();
 

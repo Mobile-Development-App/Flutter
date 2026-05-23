@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../core/utils/screen_tracker_mixin.dart';
 import '../../providers/providers.dart';
 import 'scan_screen.dart';
 
@@ -21,7 +22,10 @@ class ScanScreenMobile extends ConsumerStatefulWidget {
 }
 
 class _ScanScreenMobileState extends ConsumerState<ScanScreenMobile>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, ScreenTrackerMixin {
+  @override
+  String get trackedScreenName => 'scan';
+
   CameraController? _camera;
   BarcodeScanner? _scanner;
   bool _isProcessing = false;
@@ -166,7 +170,9 @@ class _ScanScreenMobileState extends ConsumerState<ScanScreenMobile>
         barcode: barcode,
         foundInInventory: true,
         productName: existing.name,
+        productId: existing.id,
       );
+      ref.invalidate(quickScanHistoryProvider);
       if (mounted) {
         setState(() {
           _result = ScanResult(
@@ -186,6 +192,7 @@ class _ScanScreenMobileState extends ConsumerState<ScanScreenMobile>
       productName: foodData?['name'] as String?,
       brand: foodData?['brand'] as String?,
     );
+    ref.invalidate(quickScanHistoryProvider);
     if (mounted) {
       setState(() {
         _result = ScanResult(

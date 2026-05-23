@@ -6,15 +6,19 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
 import '../../providers/providers.dart';
+import '../../core/constants/inventory_workflow_screens.dart';
 import '../../services/usage_tracking_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UsageInsightsScreen
-// Sprint 3 Business Questions: BQ1 · BQ5 · BQ7 · BQ8 · BQ9 · BQ10
+// Uso & Analítica: BQ1 · BQ2 (Sprint 4) · BQ5 · BQ7 · BQ8 · BQ9 · BQ10
 // ─────────────────────────────────────────────────────────────────────────────
 
 class UsageInsightsScreen extends ConsumerStatefulWidget {
-  const UsageInsightsScreen({super.key});
+  /// 0=BQ1 Latencia, 1=BQ2 Crashes inventario, 2=BQ5 … 6=BQ10
+  final int initialTabIndex;
+
+  const UsageInsightsScreen({super.key, this.initialTabIndex = 0});
 
   @override
   ConsumerState<UsageInsightsScreen> createState() =>
@@ -28,7 +32,8 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 6, vsync: this);
+    final initial = widget.initialTabIndex.clamp(0, 6);
+    _tabs = TabController(length: 7, vsync: this, initialIndex: initial);
     UsageTrackingService.shared.trackFeatureUsed('usageInsights');
   }
 
@@ -45,6 +50,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
     ref.read(bq8Provider.notifier).refresh();
     ref.read(bq9Provider.notifier).refresh();
     ref.read(bq10Provider.notifier).refresh();
+    ref.read(bq2Provider.notifier).refresh();
   }
 
   @override
@@ -61,7 +67,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
             Text('Uso & Analítica',
                 style: AppTypography.headline
                     .copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
-            Text('BQ1 · BQ5 · BQ7 · BQ8 · BQ9 · BQ10',
+            Text('BQ1 · BQ2 · BQ5 · BQ7 · BQ8 · BQ9 · BQ10',
                 style: AppTypography.caption2
                     .copyWith(color: Colors.white54)),
           ],
@@ -86,7 +92,8 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
               .copyWith(fontWeight: FontWeight.w700),
           unselectedLabelStyle: AppTypography.caption,
           tabs: const [
-            Tab(text: 'Latencia'),
+            Tab(text: 'BQ1 Latencia'),
+            Tab(text: 'BQ2 Crashes'),
             Tab(text: 'Horas Pico'),
             Tab(text: 'Escaneo vs Manual'),
             Tab(text: 'Funciones'),
@@ -99,6 +106,7 @@ class _UsageInsightsScreenState extends ConsumerState<UsageInsightsScreen>
         controller: _tabs,
         children: const [
           _BQ1Tab(),
+          _BQ2Tab(),
           _BQ5Tab(),
           _BQ7Tab(),
           _BQ8Tab(),
@@ -1909,6 +1917,192 @@ class _BQ10TabState extends ConsumerState<_BQ10Tab> {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BQ2 — Crashes en actualización de inventario (Sprint 4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _BQ2Tab extends ConsumerStatefulWidget {
+  const _BQ2Tab();
+
+  @override
+  ConsumerState<_BQ2Tab> createState() => _BQ2TabState();
+}
+
+class _BQ2TabState extends ConsumerState<_BQ2Tab> {
+  @override
+  void initState() {
+    super.initState();
+    UsageTrackingService.shared.trackFeatureUsed('bq2InventoryCrashes');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bq2 = ref.watch(bq2Provider);
+    final isDark = context.isDark;
+
+    return _TabScaffold(
+      bqTag: 'BQ2 · SPRINT 4',
+      tagColor: AppColors.error,
+      title: 'Crashes al actualizar inventario',
+      description:
+          'Which app screens generate the most frequent crashes for a user '
+          'during inventory updates? (conteo, escaneo, detalle, recorrido, etc.)',
+      body: bq2.when(
+        loading: () => const _SectionCard(child: _LoadingState()),
+        error: (e, _) => _InsightBanner(
+          text: 'Error al cargar: $e',
+          color: AppColors.error,
+          icon: Icons.error_outline_rounded,
+        ),
+        data: (dashboard) {
+          if (dashboard.screens.isEmpty) {
+            return Column(
+              children: [
+                _SectionCard(
+                  child: _EmptyState(
+                    icon: Icons.bug_report_outlined,
+                    message:
+                        'Aún no hay fallos registrados en flujos de inventario.\n'
+                        'Usa conteo, escaneo o edición de stock para generar datos.',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      ref.read(bq2Provider.notifier).seedDemoData(),
+                  icon: const Icon(Icons.science_outlined),
+                  label: const Text('Probar BQ2 (datos de ejemplo)'),
+                ),
+              ],
+            );
+          }
+
+          final maxCount = dashboard.screens.first.crashCount;
+          final colors = [
+            AppColors.error,
+            AppColors.warning,
+            AppColors.freshSky,
+            AppColors.deepSpaceBlue,
+            AppColors.success,
+          ];
+
+          return Column(
+            children: [
+              _SectionCard(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.warning_amber_rounded,
+                          color: AppColors.error, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${dashboard.totalCrashes} eventos',
+                            style: AppTypography.title3.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            'Últimos ${dashboard.limitDays} días · solo pantallas de inventario',
+                            style: AppTypography.caption.copyWith(
+                              color: isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...dashboard.screens.asMap().entries.map((entry) {
+                final i = entry.key;
+                final row = entry.value;
+                final label =
+                    kInventoryScreenLabels[row.screenName] ?? row.screenName;
+                final bar = maxCount == 0
+                    ? 0.0
+                    : row.crashCount / maxCount;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.smartphone_outlined,
+                              size: 18,
+                              color: colors[i % colors.length],
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: AppTypography.callout.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${row.crashCount}',
+                              style: AppTypography.title3.copyWith(
+                                color: AppColors.error,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: bar,
+                            minHeight: 8,
+                            backgroundColor: isDark
+                                ? AppColors.darkSurfaceSecondary
+                                : AppColors.surfaceSecondary,
+                            color: colors[i % colors.length],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${row.sharePercent.toStringAsFixed(0)}% de fallos en inventario',
+                          style: AppTypography.caption2.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => ref.read(bq2Provider.notifier).refresh(),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Actualizar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

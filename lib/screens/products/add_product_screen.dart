@@ -9,10 +9,12 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/extensions.dart';
+import '../../core/utils/screen_tracker_mixin.dart';
 import '../../core/utils/validators.dart';
 import '../../services/api_service.dart';
 import '../../models/product.dart';
 import '../../providers/providers.dart';
+import '../../services/connectivity_service.dart';
 import '../../widgets/app_card.dart';
 import '../../services/usage_tracking_service.dart';
 
@@ -47,7 +49,11 @@ class AddProductScreen extends ConsumerStatefulWidget {
   ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
 }
 
-class _AddProductScreenState extends ConsumerState<AddProductScreen> {
+class _AddProductScreenState extends ConsumerState<AddProductScreen>
+    with ScreenTrackerMixin {
+  @override
+  String get trackedScreenName => 'add_product';
+
   final _nameCtrl     = TextEditingController();
   final _skuCtrl      = TextEditingController();
   final _barcodeCtrl  = TextEditingController();
@@ -1029,7 +1035,7 @@ class _PickedLocationResult {
   });
 }
 
-class _LocationPickerScreen extends StatefulWidget {
+class _LocationPickerScreen extends ConsumerStatefulWidget {
   final double? initialLatitude;
   final double? initialLongitude;
 
@@ -1039,10 +1045,11 @@ class _LocationPickerScreen extends StatefulWidget {
   });
 
   @override
-  State<_LocationPickerScreen> createState() => _LocationPickerScreenState();
+  ConsumerState<_LocationPickerScreen> createState() =>
+      _LocationPickerScreenState();
 }
 
-class _LocationPickerScreenState extends State<_LocationPickerScreen> {
+class _LocationPickerScreenState extends ConsumerState<_LocationPickerScreen> {
   static const LatLng _fallbackPoint = LatLng(4.60971, -74.08175);
   late final MapController _mapController;
   late LatLng _selectedPoint;
@@ -1063,6 +1070,15 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
   Future<void> _resolveInitialPosition() async {
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
       setState(() => _loadingLocation = false);
+      return;
+    }
+
+    if (!ConnectivityService.shared.isOnline) {
+      setState(() {
+        _loadingLocation = false;
+        _locationError =
+            'Sin internet no se puede obtener tu ubicación GPS.';
+      });
       return;
     }
 
@@ -1113,6 +1129,10 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isOnline =
+        ref.watch(connectivityProvider).value ??
+            ConnectivityService.shared.isOnline;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Seleccionar ubicación'),
@@ -1158,6 +1178,43 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
                 ),
                 if (_loadingLocation)
                   const Center(child: CircularProgressIndicator()),
+                if (!isOnline)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: Material(
+                      elevation: 4,
+                      color: AppColors.error,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.wifi_off_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'No hay internet. El mapa y el GPS no '
+                                'funcionan sin conexión. Conéctate o mueve '
+                                'el pin manualmente cuando vuelva la red.',
+                                style: AppTypography.caption.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

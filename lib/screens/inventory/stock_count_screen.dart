@@ -9,6 +9,7 @@ import '../../models/product.dart';
 import '../../models/stock_count.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/stock_count_provider.dart';
+import '../../core/utils/screen_tracker_mixin.dart';
 import '../../widgets/widgets.dart';
 
 class StockCountScreen extends ConsumerStatefulWidget {
@@ -18,7 +19,11 @@ class StockCountScreen extends ConsumerStatefulWidget {
   ConsumerState<StockCountScreen> createState() => _StockCountScreenState();
 }
 
-class _StockCountScreenState extends ConsumerState<StockCountScreen> {
+class _StockCountScreenState extends ConsumerState<StockCountScreen>
+    with ScreenTrackerMixin {
+  @override
+  String get trackedScreenName => 'stock_count';
+
   final _searchCtrl = TextEditingController();
   String _query = '';
 

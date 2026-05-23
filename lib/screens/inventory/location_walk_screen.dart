@@ -7,6 +7,7 @@ import '../../core/utils/extensions.dart';
 import '../../models/location_walk.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/location_walk_provider.dart';
+import '../../core/utils/screen_tracker_mixin.dart';
 import '../../widgets/widgets.dart';
 import '../products/product_detail_screen.dart';
 
@@ -17,7 +18,11 @@ class LocationWalkScreen extends ConsumerStatefulWidget {
   ConsumerState<LocationWalkScreen> createState() => _LocationWalkScreenState();
 }
 
-class _LocationWalkScreenState extends ConsumerState<LocationWalkScreen> {
+class _LocationWalkScreenState extends ConsumerState<LocationWalkScreen>
+    with ScreenTrackerMixin {
+  @override
+  String get trackedScreenName => 'location_walk';
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDark;
